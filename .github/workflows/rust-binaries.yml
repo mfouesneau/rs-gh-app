@@ -47,14 +47,40 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install cross-compilation dependencies (Linux only)
+      - name: Install OpenSSL and cross toolchain (Linux & matrix)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libssl-dev
-          echo "OPENSSL_DIR=/usr" >> $GITHUB_ENV
-          echo "OPENSSL_LIB_DIR=/usr/lib" >> $GITHUB_ENV
-          echo "OPENSSL_INCLUDE_DIR=/usr/include/openssl" >> $GITHUB_ENV
+          TARGET="${{ matrix.target }}"
+          case "$TARGET" in
+            x86_64-unknown-linux-gnu)
+              sudo apt-get install -y pkg-config libssl-dev
+              echo "OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu" >> $GITHUB_ENV
+              echo "OPENSSL_INCLUDE_DIR=/usr/include" >> $GITHUB_ENV
+              echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig" >> $GITHUB_ENV
+              ;;
+            aarch64-unknown-linux-gnu)
+              sudo dpkg --add-architecture arm64
+              sudo apt-get update
+              sudo apt-get install -y gcc-aarch64-linux-gnu pkg-config:arm64 libssl-dev:arm64
+              echo "OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu" >> $GITHUB_ENV
+              echo "OPENSSL_INCLUDE_DIR=/usr/include" >> $GITHUB_ENV
+              echo "PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig" >> $GITHUB_ENV
+              ;;
+            armv7-unknown-linux-gnueabihf)
+              sudo dpkg --add-architecture armhf
+              sudo apt-get update
+              sudo apt-get install -y gcc-arm-linux-gnueabihf pkg-config:armhf libssl-dev:armhf
+              echo "OPENSSL_LIB_DIR=/usr/lib/arm-linux-gnueabihf" >> $GITHUB_ENV
+              echo "OPENSSL_INCLUDE_DIR=/usr/include" >> $GITHUB_ENV
+              echo "PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig" >> $GITHUB_ENV
+              ;;
+            *)
+              echo "Unsupported target: $TARGET"
+              exit 1
+              ;;
+          esac
+          echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
       - uses: taiki-e/upload-rust-binary-action@v1
         with:
           # (required) Comma-separated list of binary names (non-extension portion of filename) to build and upload.
