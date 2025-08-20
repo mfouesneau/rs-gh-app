@@ -2,20 +2,32 @@
 
 A Rust CLI tool for managing installation and updates of GitHub-released applications. This tool automatically detects your system architecture, downloads the appropriate binaries, and keeps your tools up to date.
 
+## Origin
+
+This project was inspired by a personal need for a simple and efficient way to manage GitHub-released applications (eza, bat...) on various platforms while avoiding the sudo command and nitty gritty details of each machine. Shell script works fine but a bit cumbersome (and slow).
+
+This app aims to provide a robust solution for users who want to keep their tools up to date without manual intervention. Give it a list of apps you want to install and maintain, it should do the rest.
+
 ## Features
 
 - 🚀 **Automatic Updates**: Check for and install the latest versions of your favorite GitHub-released tools
+- 🔧 **Flexible Configuration**: YAML-based configuration with multiple installation/update methods (github repo, command, script)
+- 🏃 **Dry Run Mode**: Preview what would be installed without actually doing it with verbose step-by-step output
 - 🏗️ **Architecture Detection**: Automatically detects your OS and architecture (Linux, macOS, Windows with x86_64/aarch64 support)
 - 📦 **Multiple Archive Formats**: Supports tar, tar.gz, and zip archives
-- 🔧 **Flexible Configuration**: YAML-based configuration with multiple installation methods
-- 🏃 **Dry Run Mode**: Preview what would be installed without actually doing it with verbose step-by-step output
-- 🔍 **Pixi Integration**: Automatically skips apps managed by pixi
-- ⚡ **GitHub API Integration**: Uses GitHub's API with rate limiting awareness and user-friendly time-to-reset messages
-- 📥 **Download Function**: Built-in `{download(url, path)}` template function for custom installers
+- 🔍 **Pixi Integration**: Automatically skips apps managed by pixi (others could be implemented)
 - 🛠️ **Custom Commands**: Support for separate install and update commands
+- 📥 **Download Function**: Built-in `{download(url, path)}` template function for custom installers
 - 📜 **Script Support**: Execute custom installation scripts with full templating support
+- ⚡ **GitHub API Integration**: Uses GitHub's API with rate limiting awareness and user-friendly time-to-reset messages
 
 ## Installation
+
+### Precompiled Binary Installation
+
+(release gh-action soon)
+
+### Manual Installation
 
 1. Clone this repository:
    ```bash
@@ -39,19 +51,16 @@ The tool uses a `apps.yaml` file in the current directory by default. You can sp
 
 ### Example Configuration
 
+The following example configuration includes variables and custom installation script usage. (details below)
+
 ```yaml
 apps:
   # Standard GitHub release apps (backward compatible)
-  - name: "dust"
-    bin: "dust"
-    repo: "bootandy/dust"
-    template: "{bin}-v{version}-{suffix}.tar.gz"
-  
-  - name: "bat"
-    bin: "bat"
-    repo: "sharkdp/bat"
-    template: "{bin}-v{version}-{suffix}.tar.gz"
-  
+  - name: bottom
+    bin: btm
+    repo: ClementTsang/bottom
+    template: "{name}_{suffix}.tar.gz"
+
   - name: "zoxide"
     bin: "zoxide"
     repo: "ajeetdsouza/zoxide"
@@ -76,24 +85,27 @@ apps:
 - **name**: Display name for the application
 - **bin**: Binary name (used for version checking and as the installed filename)
 
-#### Installation Methods (choose one)
+#### Installation Methods (choose one per entry)
 
-1. **Standard GitHub Releases** (original method):
+You can mix different installation methods in the same configuration file, allowing you to manage both standard GitHub releases and custom installers in one place.
+
+1. **Standard GitHub Releases**: The traditional method using GitHub releases with customizable URL templates. Perfect for most GitHub projects that follow standard release patterns.
    - **repo**: GitHub repository in format `owner/repo`
    - **template**: URL filename template with placeholders
 
-2. **Custom Commands**:
+2. **Custom Commands**: For applications with custom installers (like uv, rustup, etc.) that provide their own installation and update scripts
    - **repo**: (optional) GitHub repository for version checking
    - **install_command**: Command to run for installation
    - **update_command**: (optional) Command to run for updates
 
-3. **Custom Scripts**:
+3. **Custom Scripts**: For complex installation scenarios that require custom logic. Execute your own scripts with full access to template variables.
    - **script**: Path to script to execute for installation
 
 #### Template Variables
 
 Available in all `template`, `install_command`, `update_command`, and `script` fields:
 
+- `{name}`: Application name
 - `{bin}`: Binary name
 - `{version}`: Version number (e.g., "1.2.3")
 - `{os}`: Operating system ("linux", "darwin", "windows")
@@ -108,6 +120,10 @@ Available in all `template`, `install_command`, `update_command`, and `script` f
 - `{download(url, destination)}`: Downloads a file and returns the destination path
   - Example: `{download(https://example.com/install.sh, /tmp/install.sh)}`
   - Can be used in command templates for custom installers
+
+#### Integration with Package Managers
+
+The tool automatically detects if an application is managed by [pixi](https://pixi.sh) and will skip installation for pixi-managed applications, showing an informational message instead.
 
 ## Usage
 
@@ -210,31 +226,7 @@ $ rs-gh-app install uv
 
 - **Linux**: x86_64, aarch64
 - **macOS**: x86_64, aarch64 (Apple Silicon)
-- **Windows**: x86_64, aarch64
-
-## Installation Methods
-
-### 1. Standard GitHub Releases (Template Method)
-The traditional method using GitHub releases with customizable URL templates. Perfect for most GitHub projects that follow standard release patterns.
-
-### 2. Custom Commands (install_command/update_command)
-For applications with custom installers (like uv, rustup, etc.) that provide their own installation scripts. Supports:
-- Separate install and update commands
-- Built-in `{download(url, path)}` function for fetching installation scripts
-- Full template variable support
-
-### 3. Custom Scripts
-For complex installation scenarios that require custom logic. Execute your own scripts with full access to template variables.
-
-## Archive Format Support
-
-- `.tar.gz` / `.tgz`
-- `.tar`
-- `.zip`
-
-## Integration with Package Managers
-
-The tool automatically detects if an application is managed by [pixi](https://pixi.sh) and will skip installation for pixi-managed applications, showing an informational message instead.
+- **Windows**: x86_64, aarch64  [Not fully tested]
 
 ## Error Handling
 
@@ -257,11 +249,7 @@ The tool provides user-friendly error messages, including:
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Inspiration
-
-This tool was inspired by the bash scripts in the `bash-example/` directory, providing a more robust and cross-platform solution for managing GitHub-released applications.
+This project is licensed under the BSD-3 Clause License - see the [LICENSE](LICENSE) file for details.
 
 ## Advanced Examples
 
@@ -280,6 +268,3 @@ This tool was inspired by the bash scripts in the `bash-example/` directory, pro
   repo: "user/my-app"  # For version checking
   script: "{app_path}/scripts/install-my-app.sh {bin_dir} {version} {os} {arch}"
 ```
-
-### Mixed Configuration
-You can mix different installation methods in the same configuration file, allowing you to manage both standard GitHub releases and custom installers in one place.
