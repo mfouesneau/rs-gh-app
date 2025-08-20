@@ -1,6 +1,7 @@
 # Static App Manager
 
 [![Rust](https://github.com/mfouesneau/rs-gh-app/actions/workflows/rust-ci.yml/badge.svg)](https://github.com/mfouesneau/rs-gh-app/actions/workflows/rust-ci.yml)
+[![Release](https://github.com/mfouesneau/rs-gh-app/actions/workflows/rust-binaries.yml/badge.svg)](https://github.com/mfouesneau/rs-gh-app/actions/workflows/rust-binaries.yml)
 
 A Rust CLI tool for managing installation and updates of GitHub-released or static/standalone applications. This tool automatically detects your system architecture, downloads the appropriate binaries, and keeps your tools up to date.
 
