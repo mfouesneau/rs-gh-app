@@ -18,3 +18,4 @@ zip = "0.6"
 regex = "1.10"
 tempfile = "3.8"
 chrono = "0.4"
+openssl = { version = "0.10.73", features = ["vendored"] }
