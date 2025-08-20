@@ -1,0 +1,58 @@
+apps:
+  # Standard GitHub release apps (backward compatible)
+  - name: dust
+    bin: dust
+    repo: bootandy/dust
+    template: "{bin}-v{version}-{suffix}.tar.gz"
+  - name: bat
+    bin: bat
+    repo: sharkdp/bat
+    template: "{bin}-v{version}-{suffix}.tar.gz"
+  - name: ripgrep
+    bin: rg
+    repo: BurntSushi/ripgrep
+    template: "{bin}-{version}-{suffix}.tar.gz"
+  - name: fd
+    bin: fd
+    repo: sharkdp/fd
+    template: "{bin}-v{version}-{suffix}.tar.gz"
+  - name: zoxide
+    bin: zoxide
+    repo: ajeetdsouza/zoxide
+    template: "{bin}-{version}-{suffix}.tar.gz"
+  - name: duf
+    bin: duf
+    repo: muesli/duf
+    template: "{bin}-{version}-{suffix}.tar.gz"
+  - name: delta
+    bin: delta
+    repo: dandavison/delta
+    template: "{bin}-{version}-{suffix}.tar.gz"
+  - name: eza
+    bin: eza
+    repo: eza-community/eza
+    template: "{bin}-{version}-{suffix}.tar.gz"
+  - name: ripgrep
+    bin: rg
+    repo: BurntSushi/ripgrep
+    template: "{bin}-{version}-{suffix}.tar.gz"
+  - name: fd
+    bin: fd
+    repo: sharkdp/fd
+    template: "{bin}-v{version}-{suffix}.tar.gz"
+  - name: bottom
+    bin: btm
+    repo: ClementTsang/bottom
+    template: "{name}_{suffix}.tar.gz"
+
+  # Custom install/update commands example
+  - name: uv
+    bin: uv
+    repo: astral-sh/uv # For version checking
+    install_command: "{download(https://astral.sh/uv/install.sh, /tmp/uv-install.sh)} && sh /tmp/uv-install.sh --bin-dir {bin_dir} --yes"
+    update_command: "{bin_path} self update"
+
+  # Script-based installation example (commented out)
+  #- name: nerdfonts
+  #  bin: nerd-font-patcher
+  #  script: "{app_path}/scripts/install-nerdfonts.sh {bin_dir} {version}"

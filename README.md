@@ -1,0 +1,285 @@
+# GitHub App Installer
+
+A Rust CLI tool for managing installation and updates of GitHub-released applications. This tool automatically detects your system architecture, downloads the appropriate binaries, and keeps your tools up to date.
+
+## Features
+
+- 🚀 **Automatic Updates**: Check for and install the latest versions of your favorite GitHub-released tools
+- 🏗️ **Architecture Detection**: Automatically detects your OS and architecture (Linux, macOS, Windows with x86_64/aarch64 support)
+- 📦 **Multiple Archive Formats**: Supports tar, tar.gz, and zip archives
+- 🔧 **Flexible Configuration**: YAML-based configuration with multiple installation methods
+- 🏃 **Dry Run Mode**: Preview what would be installed without actually doing it with verbose step-by-step output
+- 🔍 **Pixi Integration**: Automatically skips apps managed by pixi
+- ⚡ **GitHub API Integration**: Uses GitHub's API with rate limiting awareness and user-friendly time-to-reset messages
+- 📥 **Download Function**: Built-in `{download(url, path)}` template function for custom installers
+- 🛠️ **Custom Commands**: Support for separate install and update commands
+- 📜 **Script Support**: Execute custom installation scripts with full templating support
+
+## Installation
+
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/your-username/rs-gh-app
+   cd rs-gh-app
+   ```
+
+2. Build the project:
+   ```bash
+   cargo build --release
+   ```
+
+3. Copy the binary to your PATH:
+   ```bash
+   cp target/release/rs-gh-app ~/.local/bin/
+   ```
+
+## Configuration
+
+The tool uses a `apps.yaml` file in the current directory by default. You can specify a custom configuration file using the `--config` or `-c` option. If the configuration file doesn't exist, a sample configuration will be created automatically.
+
+### Example Configuration
+
+```yaml
+apps:
+  # Standard GitHub release apps (backward compatible)
+  - name: "dust"
+    bin: "dust"
+    repo: "bootandy/dust"
+    template: "{bin}-v{version}-{suffix}.tar.gz"
+  
+  - name: "bat"
+    bin: "bat"
+    repo: "sharkdp/bat"
+    template: "{bin}-v{version}-{suffix}.tar.gz"
+  
+  - name: "zoxide"
+    bin: "zoxide"
+    repo: "ajeetdsouza/zoxide"
+    template: "{bin}-{version}-{suffix}.tar.gz"
+
+  # Custom install/update commands with download function
+  - name: "uv"
+    bin: "uv"
+    repo: "astral-sh/uv"  # For version checking
+    install_command: "{download(https://astral.sh/uv/install.sh, /tmp/uv-install.sh)} && sh /tmp/uv-install.sh --bin-dir {bin_dir} --yes"
+    update_command: "{bin_path} self update"
+
+  # Script-based installation
+  - name: "nerdfonts"
+    bin: "nerd-font-patcher"
+    script: "{app_path}/scripts/install-nerdfonts.sh {bin_dir} {version}"
+```
+
+### Configuration Fields
+
+#### Required Fields
+- **name**: Display name for the application
+- **bin**: Binary name (used for version checking and as the installed filename)
+
+#### Installation Methods (choose one)
+
+1. **Standard GitHub Releases** (original method):
+   - **repo**: GitHub repository in format `owner/repo`
+   - **template**: URL filename template with placeholders
+
+2. **Custom Commands**:
+   - **repo**: (optional) GitHub repository for version checking
+   - **install_command**: Command to run for installation
+   - **update_command**: (optional) Command to run for updates
+
+3. **Custom Scripts**:
+   - **script**: Path to script to execute for installation
+
+#### Template Variables
+
+Available in all `template`, `install_command`, `update_command`, and `script` fields:
+
+- `{bin}`: Binary name
+- `{version}`: Version number (e.g., "1.2.3")
+- `{os}`: Operating system ("linux", "darwin", "windows")
+- `{arch}`: Architecture ("x86_64", "aarch64")
+- `{suffix}`: Combined OS/arch suffix (e.g., "x86_64-unknown-linux-musl")
+- `{bin_dir}`: Installation directory path
+- `{bin_path}`: Full path to the binary (e.g., "/home/user/.local/bin/app")
+- `{app_path}`: Current working directory (useful for script paths)
+
+#### Special Functions
+
+- `{download(url, destination)}`: Downloads a file and returns the destination path
+  - Example: `{download(https://example.com/install.sh, /tmp/install.sh)}`
+  - Can be used in command templates for custom installers
+
+## Usage
+
+### Check Application Versions
+
+Check all configured applications:
+```bash
+rs-gh-app check
+```
+
+Check a specific application:
+```bash
+rs-gh-app check bat
+```
+
+Use a custom configuration file:
+```bash
+rs-gh-app --config my-apps.yaml check
+# or
+rs-gh-app -c my-apps.yaml check
+```
+
+### Install or Update Applications
+
+Install/update all applications:
+```bash
+rs-gh-app install
+```
+
+Install/update a specific application:
+```bash
+rs-gh-app install bat
+```
+
+Preview what would be installed (dry run):
+```bash
+rs-gh-app install --dry-run
+```
+
+Stop on first error instead of continuing:
+```bash
+rs-gh-app install --stop-on-error
+```
+
+Use a custom configuration file:
+```bash
+rs-gh-app --config my-apps.yaml install
+```
+
+## Installation Directory
+
+By default, binaries are installed to `~/.local/bin`. You can override this by setting the `bin_dir` environment variable:
+
+```bash
+export bin_dir="$HOME/my-tools"
+rs-gh-app install
+```
+
+## Command Line Options
+
+- `--config, -c <PATH>`: Specify a custom configuration file path (default: `apps.yaml`)
+- `--stop-on-error`: Stop on first error instead of continuing with other apps
+- `--dry-run`: Preview installation steps without executing them (available for `install` command)
+
+## Example Output
+
+```
+$ rs-gh-app check
+✅ dust is already at the latest version (1.2.3)
+🆕 bat v0.24.0 -> v0.25.0 (update available)
+📦 zoxide v0.9.8 (not installed)
+ℹ️  eza [pixi managed]
+
+$ rs-gh-app install --dry-run
+✅ dust is already at the latest version (1.2.3)
+🔍 [DRY RUN] Would install bat v0.25.0
+📥 Would download: https://github.com/sharkdp/bat/releases/download/v0.25.0/bat-v0.25.0-x86_64-apple-darwin.tar.gz
+📦 Would extract and install binary to: /Users/user/.local/bin
+🔍 [DRY RUN] Would install zoxide v0.9.8
+📥 Would download: https://github.com/ajeetdsouza/zoxide/releases/download/v0.9.8/zoxide-0.9.8-x86_64-apple-darwin.tar.gz
+📦 Would extract and install binary to: /Users/user/.local/bin
+ℹ️  eza [pixi managed]
+
+$ rs-gh-app install uv --dry-run
+🔍 [DRY RUN] Would install uv v0.8.12
+🔧 Would run: sh /tmp/uv-install.sh --bin-dir /Users/user/.local/bin --yes
+
+$ rs-gh-app install bat
+🔄 Installing bat v0.25.0
+ℹ️  Downloading from https://github.com/sharkdp/bat/releases/download/v0.25.0/bat-v0.25.0-x86_64-apple-darwin.tar.gz
+✅ bat v0.25.0 installed successfully
+
+$ rs-gh-app install uv
+🔄 Installing uv v0.8.12
+🔄 Running install command...
+✅ uv v0.8.12 installed successfully
+```
+
+## Supported Platforms
+
+- **Linux**: x86_64, aarch64
+- **macOS**: x86_64, aarch64 (Apple Silicon)
+- **Windows**: x86_64, aarch64
+
+## Installation Methods
+
+### 1. Standard GitHub Releases (Template Method)
+The traditional method using GitHub releases with customizable URL templates. Perfect for most GitHub projects that follow standard release patterns.
+
+### 2. Custom Commands (install_command/update_command)
+For applications with custom installers (like uv, rustup, etc.) that provide their own installation scripts. Supports:
+- Separate install and update commands
+- Built-in `{download(url, path)}` function for fetching installation scripts
+- Full template variable support
+
+### 3. Custom Scripts
+For complex installation scenarios that require custom logic. Execute your own scripts with full access to template variables.
+
+## Archive Format Support
+
+- `.tar.gz` / `.tgz`
+- `.tar`
+- `.zip`
+
+## Integration with Package Managers
+
+The tool automatically detects if an application is managed by [pixi](https://pixi.sh) and will skip installation for pixi-managed applications, showing an informational message instead.
+
+## Error Handling
+
+The tool provides user-friendly error messages, including:
+
+- **Rate Limiting**: When GitHub API rate limits are hit, shows both absolute reset time and relative countdown:
+  ```
+  🚨 GitHub API rate limit exceeded. Resets at: 2025-08-20 10:22:53 UTC (in 17min)
+  ```
+- **Network Issues**: Clear messages for download failures and connectivity problems
+- **Installation Failures**: Detailed error output from failed commands or scripts
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Inspiration
+
+This tool was inspired by the bash scripts in the `bash-example/` directory, providing a more robust and cross-platform solution for managing GitHub-released applications.
+
+## Advanced Examples
+
+### Custom Installer with Download Function
+```yaml
+- name: "rustup"
+  bin: "rustup"
+  install_command: "{download(https://sh.rustup.rs, /tmp/rustup.sh)} && sh /tmp/rustup.sh -y --default-toolchain stable"
+  update_command: "{bin_path} update"
+```
+
+### Script-based Installation
+```yaml
+- name: "my-app"
+  bin: "my-app"
+  repo: "user/my-app"  # For version checking
+  script: "{app_path}/scripts/install-my-app.sh {bin_dir} {version} {os} {arch}"
+```
+
+### Mixed Configuration
+You can mix different installation methods in the same configuration file, allowing you to manage both standard GitHub releases and custom installers in one place.
