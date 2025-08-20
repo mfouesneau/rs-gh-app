@@ -1,12 +1,12 @@
-# GitHub App Installer
+# Static App Manager
 
-A Rust CLI tool for managing installation and updates of GitHub-released applications. This tool automatically detects your system architecture, downloads the appropriate binaries, and keeps your tools up to date.
+A Rust CLI tool for managing installation and updates of GitHub-released or static/standalone applications. This tool automatically detects your system architecture, downloads the appropriate binaries, and keeps your tools up to date.
 
 ## Origin
 
-This project was inspired by a personal need for a simple and efficient way to manage GitHub-released applications (eza, bat...) on various platforms while avoiding the sudo command and nitty gritty details of each machine. Shell script works fine but a bit cumbersome (and slow).
+This project was inspired by a personal need for a simple and efficient way to manage GitHub-released applications (eza, bat...) on various platforms while avoiding the sudo command and nitty-gritty details of each machine. Shell scripts work fine, but are a bit cumbersome (and slow).
 
-This app aims to provide a robust solution for users who want to keep their tools up to date without manual intervention. Give it a list of apps you want to install and maintain, it should do the rest.
+This app aims to provide a robust solution for users who want to keep their tools up to date without manual intervention. Give it a list of apps you want to install and maintain, and it should do the rest.
 
 ## Features
 
