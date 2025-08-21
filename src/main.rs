@@ -1091,19 +1091,26 @@ async fn self_update(system_info: &SystemInfo, dry_run: bool) -> Result<()> {
 
     #[cfg(not(windows))]
     {
+        let backup_path = current_exe.with_extension(".old");
+        if backup_path.exists() {
+            fs::remove_file(&backup_path)?;
+        }
+        fs::rename(&current_exe, &backup_path)?;
         fs::copy(&new_binary_path, &current_exe)?;
         // Make executable
         use std::os::unix::fs::PermissionsExt;
         let mut perms = fs::metadata(&current_exe)?.permissions();
         perms.set_mode(0o755);
         fs::set_permissions(&current_exe, perms)?;
+        // Clean up backup on successful replacement
+        let _ = fs::remove_file(&backup_path);
     }
 
     println!(
         "✅ Successfully updated gh-app-installer to v{}",
         latest_version
     );
-    println!("🎉 Restart your terminal or run the command again to use the new version");
+    println!("🎉 Run the command again to use the new version");
 
     Ok(())
 }
