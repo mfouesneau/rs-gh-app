@@ -248,8 +248,8 @@ fn detect_system_info() -> Result<SystemInfo> {
     let arch = std::env::consts::ARCH;
 
     let (normalized_os, normalized_arch, suffix) = match (os, arch) {
-        ("linux", "x86_64") => ("linux", "x86_64", "x86_64-unknown-linux-musl"),
-        ("linux", "aarch64") => ("linux", "aarch64", "aarch64-unknown-linux-musl"),
+        ("linux", "x86_64") => ("linux", "x86_64", "x86_64-unknown-linux-gnu"),
+        ("linux", "aarch64") => ("linux", "aarch64", "aarch64-unknown-linux-gnu"),
         ("macos", "x86_64") => ("darwin", "x86_64", "x86_64-apple-darwin"),
         ("macos", "aarch64") => ("darwin", "aarch64", "x86_64-apple-darwin"), // Many releases use x86_64 for Mac
         ("windows", "x86_64") => ("windows", "x86_64", "x86_64-pc-windows-msvc"),
