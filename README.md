@@ -32,7 +32,7 @@ You can download pre-built binaries from the [releases page](https://github.com/
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/your-username/rs-gh-app
+   git clone https://github.com/mfouesneau/rs-gh-app
    cd rs-gh-app
    ```
 
