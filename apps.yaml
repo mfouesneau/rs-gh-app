@@ -1,56 +1,68 @@
 apps:
-  # Standard GitHub release apps (backward compatible)
-  - name: dust
-    bin: dust
-    repo: bootandy/dust
-    template: "{bin}-v{version}-{suffix}.tar.gz"
   - name: bat
     bin: bat
     repo: sharkdp/bat
-    template: "{bin}-v{version}-{suffix}.tar.gz"
-  - name: ripgrep
-    bin: rg
-    repo: BurntSushi/ripgrep
-    template: "{bin}-{version}-{suffix}.tar.gz"
-  - name: fd
-    bin: fd
-    repo: sharkdp/fd
-    template: "{bin}-v{version}-{suffix}.tar.gz"
-  - name: zoxide
-    bin: zoxide
-    repo: ajeetdsouza/zoxide
-    template: "{bin}-{version}-{suffix}.tar.gz"
-  - name: duf
-    bin: duf
-    repo: muesli/duf
-    template: "{bin}-{version}-{suffix}.tar.gz"
-  - name: delta
-    bin: delta
-    repo: dandavison/delta
-    template: "{bin}-{version}-{suffix}.tar.gz"
-  - name: eza
-    bin: eza
-    repo: eza-community/eza
-    template: "{bin}-{version}-{suffix}.tar.gz"
-  - name: ripgrep
-    bin: rg
-    repo: BurntSushi/ripgrep
-    template: "{bin}-{version}-{suffix}.tar.gz"
-  - name: fd
-    bin: fd
-    repo: sharkdp/fd
     template: "{bin}-v{version}-{suffix}.tar.gz"
   - name: bottom
     bin: btm
     repo: ClementTsang/bottom
     template: "{name}_{suffix}.tar.gz"
-
-  # Custom install/update commands example
+  - name: delta
+    bin: delta
+    repo: dandavison/delta
+    template: "{bin}-{version}-{suffix}.tar.gz"
+  - name: duf
+    bin: duf
+    repo: muesli/duf
+    template: "{bin}_{version}_{os}_{arch}.tar.gz"
+  - name: dust
+    bin: dust
+    repo: bootandy/dust
+    template: "{bin}-v{version}-{suffix}.tar.gz"
+  - name: eza
+    bin: eza
+    repo: eza-community/eza
+    template: "{bin}-{version}-{suffix}.tar.gz"
+  - name: fd
+    bin: fd
+    repo: sharkdp/fd
+    template: "{bin}-v{version}-{suffix}.tar.gz"
+  - name: fzf
+    bin: fzf
+    repo: junegunn/fzf
+    install_command: "git clone --depth 1 'https://github.com/junegunn/fzf.git' ${HOME}/.fzf 2>/dev/null || echo $(cd ${HOME}/.fzf && git pull) && ${HOME}/.fzf/install --xdg --all --no-update-rc --completion && [ -f ${HOME}/.fzf/bin/fzf ] && cp ${HOME}/.fzf/bin/fzf {bin_dir}"
+    update_command: "git clone --depth 1 'https://github.com/junegunn/fzf.git' ${HOME}/.fzf 2>/dev/null || echo $(cd ${HOME}/.fzf && git pull) && ${HOME}/.fzf/install --xdg --all --no-update-rc --completion && [ -f ${HOME}/.fzf/bin/fzf ] && cp ${HOME}/.fzf/bin/fzf {bin_dir}"
+  - name: nerdfonts
+    bin: getnf
+    repo: getnf/getnf
+    install_command: "{download(https://raw.githubusercontent.com/getnf/getnf/main/install.sh, /tmp/getnf-install.sh)} && sh /tmp/getnf-install.sh && getnf -i Meslo"
+    update_command: "getnf -U Meslo || true"
+  - name: pixi
+    bin: pixi
+    repo: prefix-dev/pixi
+    install_command: "{download(https://pixi.sh/install.sh, /tmp/pixi-install.sh)} && sh /tmp/pixi-install.sh"
+    update_command: "{bin} self-update --no-release-note && {bin} global update"
+  - name: ripgrep
+    bin: rg
+    repo: BurntSushi/ripgrep
+    template: "{name}-{version}-{suffix}.tar.gz"
+  - name: starship
+    bin: starship
+    repo: starship/starship
+    install_command: "{download(https://starship.rs/install.sh, starship-install.sh)} && sh /tmp/starship-install.sh --bin-dir {bin_dir} --yes"
+    update_command: "{download(https://starship.rs/install.sh, starship-install.sh)} && sh /tmp/starship-install.sh --bin-dir {bin_dir} --yes"
   - name: uv
     bin: uv
     repo: astral-sh/uv # For version checking
     install_command: "{download(https://astral.sh/uv/install.sh, /tmp/uv-install.sh)} && sh /tmp/uv-install.sh --bin-dir {bin_dir} --yes"
     update_command: "{bin_path} self update"
+  - name: yazi
+    bin: yazi
+    repo: sxyazi/yazi
+  - name: zoxide
+    bin: zoxide
+    repo: ajeetdsouza/zoxide
+    template: "{bin}-{version}-{suffix}.tar.gz"
 
   # Script-based installation example (commented out)
   #- name: nerdfonts
