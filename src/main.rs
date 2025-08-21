@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use regex::Regex;
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -13,6 +14,7 @@ use tempfile::TempDir;
 #[derive(Parser)]
 #[command(name = "rs-app-installer")]
 #[command(about = "Install and update applications")]
+#[command(version = env!("CARGO_PKG_VERSION"))]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -40,6 +42,12 @@ enum Commands {
     Check {
         /// Application name to check (checks all if not specified)
         app_name: Option<String>,
+    },
+    /// Update this tool to the latest version
+    SelfUpdate {
+        /// Preview what would be done without actually updating
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 
@@ -145,6 +153,9 @@ async fn main() -> Result<()> {
         Commands::Check { app_name } => {
             let apps = filter_apps(&config.apps, app_name)?;
             check_apps(apps, &system_info, cli.stop_on_error).await?;
+        }
+        Commands::SelfUpdate { dry_run } => {
+            self_update(&system_info, dry_run).await?;
         }
     }
     Ok(())
@@ -877,4 +888,173 @@ async fn download_file(url: &str, dest_path: &str) -> Result<String> {
     fs::write(dest_path, bytes)?;
 
     Ok(dest_path.to_string())
+}
+
+async fn self_update(system_info: &SystemInfo, dry_run: bool) -> Result<()> {
+    const SELF_REPO: &str = "mfouesneau/rs-gh-app";
+    const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+    println!("🔍 Checking for updates to gh-app-installer...");
+
+    // Get latest version from GitHub
+    let latest_version = match get_latest_version(SELF_REPO).await {
+        Ok(version) => version,
+        Err(e) => {
+            if e.to_string().contains("404") {
+                println!("ℹ️  No releases found on GitHub. This might be a development build.");
+                println!("ℹ️  Current version: v{}", CURRENT_VERSION);
+                return Ok(());
+            } else {
+                return Err(e);
+            }
+        }
+    };
+
+    // Parse versions for comparison
+    let current_version = Version::parse(CURRENT_VERSION)
+        .with_context(|| format!("Invalid current version: {}", CURRENT_VERSION))?;
+    let latest_version_parsed = Version::parse(&latest_version)
+        .with_context(|| format!("Invalid latest version: {}", latest_version))?;
+
+    if latest_version_parsed <= current_version {
+        if latest_version_parsed == current_version {
+            println!(
+                "✅ gh-app-installer is already at the latest version (v{})",
+                CURRENT_VERSION
+            );
+        } else {
+            println!(
+                "ℹ️  Local version (v{}) is newer than the latest release (v{})",
+                CURRENT_VERSION, latest_version
+            );
+        }
+        return Ok(());
+    }
+
+    if dry_run {
+        println!(
+            "🔍 [DRY RUN] Would update gh-app-installer v{} -> v{}",
+            CURRENT_VERSION, latest_version
+        );
+        let url = build_self_update_url(&latest_version, system_info)?;
+        println!("📥 Would download: {}", url);
+        println!("🔄 Would replace current binary");
+        return Ok(());
+    }
+
+    println!(
+        "🆕 Updating gh-app-installer v{} -> v{}",
+        CURRENT_VERSION, latest_version
+    );
+
+    // Get current executable path
+    let current_exe = std::env::current_exe().context("Failed to get current executable path")?;
+
+    // Check if we can write to the current executable
+    if let Err(e) = fs::metadata(&current_exe).and_then(|m| {
+        if m.permissions().readonly() {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "Binary is read-only",
+            ))
+        } else {
+            Ok(())
+        }
+    }) {
+        return Err(anyhow::anyhow!(
+            "❌ Cannot update: insufficient permissions to replace binary at {}\n   Error: {}\n   Hint: Try running with elevated permissions or reinstall manually",
+            current_exe.display(),
+            e
+        ));
+    }
+
+    // Download new version
+    let url = build_self_update_url(&latest_version, system_info)?;
+    println!("ℹ️  Downloading from {}", url);
+
+    let temp_dir = TempDir::new()?;
+    let temp_path = temp_dir.path();
+
+    // Download and extract
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&url)
+        .header("User-Agent", "gh-app-installer/0.1.0")
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to download update: HTTP {}",
+            response.status()
+        ));
+    }
+
+    let bytes = response.bytes().await?;
+
+    // Extract based on file extension
+    if url.ends_with(".tar.gz") {
+        extract_tar_gz(&bytes, temp_path)?;
+    } else if url.ends_with(".zip") {
+        extract_zip(&bytes, temp_path)?;
+    } else {
+        return Err(anyhow::anyhow!(
+            "Unsupported archive format for self-update"
+        ));
+    }
+
+    // Find the new binary
+    let new_binary_path = find_binary_in_extracted(temp_path, "rs-gh-app")
+        .or_else(|_| find_binary_in_extracted(temp_path, "gh-app-installer"))
+        .context("Could not find updated binary in downloaded archive")?;
+
+    // Replace current binary
+    println!("🔄 Replacing current binary...");
+
+    // On Windows, we might need to rename the current exe first
+    #[cfg(windows)]
+    {
+        let backup_path = current_exe.with_extension("exe.old");
+        if backup_path.exists() {
+            fs::remove_file(&backup_path)?;
+        }
+        fs::rename(&current_exe, &backup_path)?;
+        fs::copy(&new_binary_path, &current_exe)?;
+        // Clean up backup on successful replacement
+        let _ = fs::remove_file(&backup_path);
+    }
+
+    #[cfg(not(windows))]
+    {
+        fs::copy(&new_binary_path, &current_exe)?;
+        // Make executable
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&current_exe)?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&current_exe, perms)?;
+    }
+
+    println!(
+        "✅ Successfully updated gh-app-installer to v{}",
+        latest_version
+    );
+    println!("🎉 Restart your terminal or run the command again to use the new version");
+
+    Ok(())
+}
+
+fn build_self_update_url(version: &str, system_info: &SystemInfo) -> Result<String> {
+    let archive_ext = if system_info.os == "windows" {
+        "zip"
+    } else {
+        "tar.gz"
+    };
+
+    // Following the actual GitHub release pattern: rs-gh-app-{suffix}.{ext}
+    let filename = format!("rs-gh-app-{}.{}", system_info.suffix, archive_ext);
+
+    Ok(format!(
+        "https://github.com/mfouesneau/rs-gh-app/releases/download/v{}/{}",
+        version, filename
+    ))
 }

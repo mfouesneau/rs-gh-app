@@ -25,7 +25,7 @@ This app aims to provide a robust solution for users who want to keep their tool
 
 ### Precompiled Binary Installation
 
-(release gh-action soon)
+You can download pre-built binaries from the [releases page](https://github.com/mfouesneau/rs-gh-app/releases).
 
 ### Manual Installation
 
@@ -146,6 +146,25 @@ rs-gh-app --config my-apps.yaml check
 rs-gh-app -c my-apps.yaml check
 ```
 
+### Self-Update
+
+Update the tool itself to the latest version:
+```bash
+rs-gh-app self-update
+```
+
+Preview what would be updated:
+```bash
+rs-gh-app self-update --dry-run
+```
+
+Check the current version:
+```bash
+rs-gh-app --version
+```
+
+**Version Comparison**: The self-update feature uses semantic versioning comparison to ensure you only upgrade to newer versions. If your local version is newer than the latest release (e.g., development builds), it will not downgrade and will inform you that your local version is newer.
+
 ### Install or Update Applications
 
 Install/update all applications:
@@ -184,9 +203,10 @@ rs-gh-app install
 
 ## Command Line Options
 
+- `--version`: Show the current version of the tool
 - `--config, -c <PATH>`: Specify a custom configuration file path (default: `apps.yaml`)
 - `--stop-on-error`: Stop on first error instead of continuing with other apps
-- `--dry-run`: Preview installation steps without executing them (available for `install` command)
+- `--dry-run`: Preview installation steps without executing them (available for `install` and `self-update` commands)
 
 ## Example Output
 
@@ -220,6 +240,28 @@ $ rs-gh-app install uv
 🔄 Installing uv v0.8.12
 🔄 Running install command...
 ✅ uv v0.8.12 installed successfully
+
+$ rs-gh-app self-update --dry-run
+🔍 Checking for updates to gh-app-installer...
+ℹ️  Current version: v0.1.0
+🔍 [DRY RUN] Would update gh-app-installer v0.1.0 -> v0.1.1
+📥 Would download: https://github.com/mfouesneau/rs-gh-app/releases/download/v0.1.1/rs-gh-app-x86_64-apple-darwin.tar.gz
+🔄 Would replace current binary
+
+$ rs-gh-app self-update
+🔍 Checking for updates to gh-app-installer...
+ℹ️  Current version: v0.1.0
+🆕 Updating gh-app-installer v0.1.0 -> v0.1.1
+ℹ️  Downloading from https://github.com/mfouesneau/rs-gh-app/releases/download/v0.1.1/rs-gh-app-x86_64-apple-darwin.tar.gz
+🔄 Replacing current binary...
+✅ Successfully updated gh-app-installer to v0.1.1
+🎉 Restart your terminal or run the command again to use the new version
+
+# When local version is newer than latest release
+$ rs-gh-app self-update
+🔍 Checking for updates to gh-app-installer...
+ℹ️  Current version: v0.2.0
+ℹ️  Local version (v0.2.0) is newer than the latest release (v0.1.0)
 ```
 
 ## Supported Platforms
