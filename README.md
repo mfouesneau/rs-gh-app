@@ -11,6 +11,7 @@ This app aims to provide a robust solution for users who want to keep their tool
 ## Features
 
 - 🚀 **Automatic Updates**: Check for and install the latest versions of your favorite GitHub-released tools
+- 🏷️ **Intelligent Tag Detection**: Automatically detects correct release tags by following GitHub redirects (handles v1.2.3, 1.2.3, release-1.2.3, etc.)
 - 🔧 **Flexible Configuration**: YAML-based configuration with multiple installation/update methods (github repo, command, script)
 - 🏃 **Dry Run Mode**: Preview what would be installed without actually doing it with verbose step-by-step output
 - 🏗️ **Architecture Detection**: Automatically detects your OS and architecture (Linux, macOS, Windows with x86_64/aarch64 support)
@@ -114,6 +115,16 @@ Available in all `template`, `install_command`, `update_command`, and `script` f
 - `{bin_dir}`: Installation directory path
 - `{bin_path}`: Full path to the binary (e.g., "/home/user/.local/bin/app")
 - `{app_path}`: Current working directory (useful for script paths)
+
+#### Intelligent Tag Detection
+
+The tool automatically detects the correct release tag format by following GitHub's `/releases/latest` redirect. This handles repositories that use different tagging conventions:
+- `v1.2.3` (most common)
+- `1.2.3` (without 'v' prefix)
+- `release-1.2.3` (custom prefixes)
+- Any other tagging scheme
+
+This eliminates the need to guess tag formats and works reliably across different repositories.
 
 #### Special Functions
 
@@ -220,9 +231,11 @@ $ rs-gh-app check
 $ rs-gh-app install --dry-run
 ✅ dust is already at the latest version (1.2.3)
 🔍 [DRY RUN] Would install bat v0.25.0
+🏷️  Found release tag: v0.25.0
 📥 Would download: https://github.com/sharkdp/bat/releases/download/v0.25.0/bat-v0.25.0-x86_64-apple-darwin.tar.gz
 📦 Would extract and install binary to: /Users/user/.local/bin
 🔍 [DRY RUN] Would install zoxide v0.9.8
+🏷️  Found release tag: v0.9.8
 📥 Would download: https://github.com/ajeetdsouza/zoxide/releases/download/v0.9.8/zoxide-0.9.8-x86_64-apple-darwin.tar.gz
 📦 Would extract and install binary to: /Users/user/.local/bin
 ℹ️  eza [pixi managed]

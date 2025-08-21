@@ -419,7 +419,7 @@ async fn install_app(app: &App, system_info: &SystemInfo, dry_run: bool) -> Resu
 
     match app.installation_method() {
         InstallationMethod::Template => {
-            let url = build_download_url(app, &latest_version, system_info)?;
+            let url = build_download_url(app, &latest_version, system_info).await?;
             println!("ℹ️  Downloading from {}", url);
             download_and_install(app, &url).await?;
         }
@@ -444,7 +444,7 @@ async fn install_app(app: &App, system_info: &SystemInfo, dry_run: bool) -> Resu
 /**
  * Builds the download URL for an app.
  */
-fn build_download_url(app: &App, version: &str, system_info: &SystemInfo) -> Result<String> {
+async fn build_download_url(app: &App, version: &str, system_info: &SystemInfo) -> Result<String> {
     let template = app.get_template();
     let filename = template
         .replace("{name}", &app.name)
@@ -454,10 +454,13 @@ fn build_download_url(app: &App, version: &str, system_info: &SystemInfo) -> Res
         .replace("{arch}", &system_info.arch)
         .replace("{suffix}", &system_info.suffix);
 
+    // Get the actual tag from GitHub redirect
+    let tag = get_latest_release_tag(app.get_repo(), false).await?;
+
     Ok(format!(
         "https://github.com/{}/releases/download/{}/{}",
         app.get_repo(),
-        version,
+        tag,
         filename
     ))
 }
@@ -689,30 +692,57 @@ async fn get_latest_version(repo: &str) -> Result<String> {
         }
     }
 
-    let url = format!("https://api.github.com/repos/{}/releases/latest", repo);
+    let tag_name = get_latest_release_tag(repo, false).await?;
+    extract_version_from_string(&tag_name)
+        .ok_or_else(|| anyhow::anyhow!("Could not extract version from tag: {}", tag_name))
+}
+
+async fn get_latest_release_tag(repo: &str, debug: bool) -> Result<String> {
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()?;
+
+    let url = format!("https://github.com/{}/releases/latest", repo);
     let response = client
-        .get(&url)
+        .head(&url)
         .header("User-Agent", "gh-app-installer/0.1.0")
         .send()
         .await?;
 
-    if !response.status().is_success() {
-        return Err(anyhow::anyhow!(
-            "Failed to fetch latest release: HTTP {}",
-            response.status()
-        ));
+    match response.status().as_u16() {
+        302 => {
+            // Get the redirect location
+            let location = response
+                .headers()
+                .get("location")
+                .and_then(|v| v.to_str().ok())
+                .ok_or_else(|| anyhow::anyhow!("No location header in redirect response"))?;
+
+            // Extract tag from URL like: https://github.com/bootandy/dust/releases/tag/v1.2.3
+            let expected_prefix = format!("https://github.com/{}/releases/tag/", repo);
+            if let Some(tag_part) = location.strip_prefix(&expected_prefix) {
+                if debug {
+                    println!("🏷️  Found release tag: {}", tag_part);
+                }
+                Ok(tag_part.to_string())
+            } else {
+                Err(anyhow::anyhow!(
+                    "Unexpected redirect URL format: {}\nExpected prefix: {}",
+                    location,
+                    expected_prefix
+                ))
+            }
+        }
+        404 => Err(anyhow::anyhow!(
+            "Repository '{}' not found or no releases available",
+            repo
+        )),
+        other => Err(anyhow::anyhow!(
+            "Unexpected HTTP status {} when checking latest release for '{}'",
+            other,
+            repo
+        )),
     }
-
-    let response_text = response.text().await?;
-    let release: serde_json::Value = serde_json::from_str(&response_text)
-        .with_context(|| format!("Failed to parse JSON response: {}", response_text))?;
-
-    let tag_name = release["tag_name"]
-        .as_str()
-        .ok_or_else(|| anyhow::anyhow!("No tag_name found in release"))?;
-
-    extract_version_from_string(tag_name)
-        .ok_or_else(|| anyhow::anyhow!("Could not extract version from tag: {}", tag_name))
 }
 
 /// Parse version from string defined as xxx.xxx.xxx format
@@ -730,7 +760,8 @@ async fn preview_installation_steps(
 ) -> Result<()> {
     match app.installation_method() {
         InstallationMethod::Template => {
-            let url = build_download_url(app, version, system_info)?;
+            let _tag = get_latest_release_tag(app.get_repo(), true).await?;
+            let url = build_download_url(app, version, system_info).await?;
             println!("📥 Would download: {}", url);
             println!(
                 "📦 Would extract and install binary to: {}",
@@ -936,7 +967,7 @@ async fn self_update(system_info: &SystemInfo, dry_run: bool) -> Result<()> {
             "🔍 [DRY RUN] Would update gh-app-installer v{} -> v{}",
             CURRENT_VERSION, latest_version
         );
-        let url = build_self_update_url(&latest_version, system_info)?;
+        let url = build_self_update_url(&latest_version, system_info).await?;
         println!("📥 Would download: {}", url);
         println!("🔄 Would replace current binary");
         return Ok(());
@@ -969,7 +1000,7 @@ async fn self_update(system_info: &SystemInfo, dry_run: bool) -> Result<()> {
     }
 
     // Download new version
-    let url = build_self_update_url(&latest_version, system_info)?;
+    let url = build_self_update_url(&latest_version, system_info).await?;
     println!("ℹ️  Downloading from {}", url);
 
     let temp_dir = TempDir::new()?;
@@ -1043,7 +1074,7 @@ async fn self_update(system_info: &SystemInfo, dry_run: bool) -> Result<()> {
     Ok(())
 }
 
-fn build_self_update_url(version: &str, system_info: &SystemInfo) -> Result<String> {
+async fn build_self_update_url(_version: &str, system_info: &SystemInfo) -> Result<String> {
     let archive_ext = if system_info.os == "windows" {
         "zip"
     } else {
@@ -1053,8 +1084,11 @@ fn build_self_update_url(version: &str, system_info: &SystemInfo) -> Result<Stri
     // Following the actual GitHub release pattern: rs-gh-app-{suffix}.{ext}
     let filename = format!("rs-gh-app-{}.{}", system_info.suffix, archive_ext);
 
+    // Get the actual tag from GitHub redirect
+    let tag = get_latest_release_tag("mfouesneau/rs-gh-app", false).await?;
+
     Ok(format!(
-        "https://github.com/mfouesneau/rs-gh-app/releases/download/v{}/{}",
-        version, filename
+        "https://github.com/mfouesneau/rs-gh-app/releases/download/{}/{}",
+        tag, filename
     ))
 }
