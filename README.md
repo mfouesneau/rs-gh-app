@@ -48,7 +48,7 @@ You can download pre-built binaries from the [releases page](https://github.com/
 
 ## Configuration
 
-The tool uses a `apps.yaml` file in the current directory by default. You can specify a custom configuration file using the `--config` or `-c` option. If the configuration file doesn't exist, a sample configuration will be created automatically.
+The tool uses a `apps.yaml` file in the current directory or with the binary by default. You can specify a custom configuration file using the `--config` or `-c` option. If the configuration file doesn't exist, a sample configuration will be created automatically.
 
 ### Example Configuration
 

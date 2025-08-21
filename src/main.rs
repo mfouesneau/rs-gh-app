@@ -4,9 +4,9 @@ use regex::Regex;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use std::{env, fs};
 use tempfile::TempDir;
 
 // CLI options ==============================================
@@ -138,6 +138,52 @@ enum InstallationMethod {
 
 // CLI main definition ==============================================
 
+// check for a configuration file in order: provided, in the current directory, the directory of the binary.
+fn locate_config_file(config_file: &str) -> Result<PathBuf> {
+    let current_dir = env::current_dir()?;
+    let binary_dir = env::current_exe()?.parent().unwrap().to_path_buf();
+
+    let default_config_filename = "apps.yaml";
+    let config_file_paths = vec![
+        PathBuf::from(config_file),
+        current_dir.join(default_config_filename),
+        binary_dir.join(default_config_filename),
+    ];
+
+    for path in config_file_paths {
+        if path.exists() {
+            println!("ℹ️  Using configuration from {}", path.display());
+            return Ok(path);
+        }
+    }
+
+    Err(anyhow::anyhow!("No configuration file found"))
+}
+
+/**
+ * Load the configuration from the given file.
+ *
+ * This function reads the configuration file and returns a `Config` struct.
+ * If the file does not exist, it creates a sample configuration file.
+ */
+async fn load_config(config_file: &str) -> Result<Config> {
+    let config_path = locate_config_file(config_file);
+
+    // if the config file does not exist, create a sample config file
+    if config_path.is_err() {
+        create_sample_config_file(config_file).await?;
+    }
+    let config_path = config_path.unwrap();
+
+    let content = fs::read_to_string(&config_path)
+        .with_context(|| format!("Failed to read config file: {}", config_path.display()))?;
+
+    let config: Config =
+        serde_yaml::from_str(&content).with_context(|| "Failed to parse YAML config")?;
+
+    Ok(config)
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -161,21 +207,12 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-/**
- * Load the configuration from the given file.
- *
- * This function reads the configuration file and returns a `Config` struct.
- * If the file does not exist, it creates a sample configuration file.
- */
-async fn load_config(config_file: &str) -> Result<Config> {
-    let config_path = PathBuf::from(config_file);
-
-    if !config_path.exists() {
-        // Create a sample config file
-        let sample_config = Config {
-            apps: vec![
-                App {
-                    name: "dust".to_string(),
+// Generate a sample config file
+async fn create_sample_config_file(config_file: &str) -> Result<()> {
+    let sample_config = Config {
+        apps: vec![
+            App {
+                name: "dust".to_string(),
                     bin: "dust".to_string(),
                     repo: Some("bootandy/dust".to_string()),
                     template: Some("{bin}-v{version}-{suffix}.tar.gz".to_string()),
@@ -204,18 +241,15 @@ async fn load_config(config_file: &str) -> Result<Config> {
             ],
         };
 
-        let yaml = serde_yaml::to_string(&sample_config)?;
-        fs::write(&config_path, yaml)?;
-        println!("📝 Created sample config file: {}", config_path.display());
-    }
+    let yaml = serde_yaml::to_string(&sample_config)?;
+    let config_sample_file = PathBuf::from(config_file);
+    fs::write(&config_sample_file, yaml)?;
+    println!(
+        "📝 Created sample config file: {}",
+        config_sample_file.display()
+    );
 
-    let content = fs::read_to_string(&config_path)
-        .with_context(|| format!("Failed to read config file: {}", config_path.display()))?;
-
-    let config: Config =
-        serde_yaml::from_str(&content).with_context(|| "Failed to parse YAML config")?;
-
-    Ok(config)
+    Ok(())
 }
 
 /**
