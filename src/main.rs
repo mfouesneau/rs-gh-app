@@ -365,7 +365,7 @@ async fn get_app_status(app: &App, _system_info: &SystemInfo) -> Result<AppStatu
 
     let needs_install = !pixi_managed
         && (current_version.is_none()
-            || (app.has_repo() && current_version.as_ref() != Some(&latest_version)));
+            || (app.has_repo() && is_version_update_needed(&current_version, &latest_version)));
 
     Ok(AppStatus {
         app: app.clone(),
@@ -393,20 +393,23 @@ fn print_app_status(status: &AppStatus) {
 
     match (&status.current_version, &status.latest_version) {
         (Some(current), Some(latest)) => {
-            if current == latest {
-                println!(
-                    "✅ {} is already at the latest version ({})",
-                    status.app.name, latest
-                );
-            } else {
+            if status.needs_install {
                 println!(
                     "🆕 {} v{} -> v{} (update available)",
                     status.app.name, current, latest
                 );
+            } else {
+                println!(
+                    "✅ {} is already at the latest version ({})",
+                    status.app.name, current
+                );
             }
         }
         (None, Some(latest)) => {
-            println!("📦 {} v{} (not installed)", status.app.name, latest);
+            println!(
+                "📦 {} v{} (not installed or version not detectable)",
+                status.app.name, latest
+            );
         }
         _ => {
             println!("❓ {} (version unknown)", status.app.name);
@@ -469,7 +472,7 @@ async fn install_app(app: &App, system_info: &SystemInfo, dry_run: bool) -> Resu
     if let Some(version) = get_current_version(&app.bin) {
         println!("✅ {} v{} installed successfully", app.name, version);
     } else {
-        println!("⚠️  {} installed but version check failed", app.name);
+        println!("⚠️  {} installed but version not detectable (binary may not support standard version flags)", app.name);
     }
 
     Ok(())
@@ -671,10 +674,91 @@ fn check_pixi_managed(bin_name: &str) -> bool {
 // Get current / latest versions ===============================================
 
 fn get_current_version(bin_name: &str) -> Option<String> {
-    let output = Command::new(bin_name).arg("--version").output().ok()?;
+    get_current_version_with_debug(bin_name, false)
+}
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    extract_version_from_string(&stdout)
+fn is_version_update_needed(current: &Option<String>, latest: &str) -> bool {
+    match current {
+        None => true, // Not installed, so update needed
+        Some(current_ver) => {
+            // Try to parse both versions as semantic versions
+            match (Version::parse(current_ver), Version::parse(latest)) {
+                (Ok(current_semver), Ok(latest_semver)) => latest_semver > current_semver,
+                _ => {
+                    // Fall back to string comparison if parsing fails
+                    current_ver != latest
+                }
+            }
+        }
+    }
+}
+
+fn get_current_version_with_debug(bin_name: &str, debug: bool) -> Option<String> {
+    // Try different version flags in order of preference
+    let version_flags = ["--version", "-V", "-v", "version"];
+
+    for flag in &version_flags {
+        if let Ok(output) = Command::new(bin_name).arg(flag).output() {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+
+                // Try to extract version from stdout first, then stderr
+                if let Some(version) = extract_version_from_string(&stdout) {
+                    if debug {
+                        println!(
+                            "🔍 Version detected using '{} {}': {}",
+                            bin_name, flag, version
+                        );
+                    }
+                    return Some(version);
+                }
+                if let Some(version) = extract_version_from_string(&stderr) {
+                    if debug {
+                        println!(
+                            "🔍 Version detected using '{} {}' (from stderr): {}",
+                            bin_name, flag, version
+                        );
+                    }
+                    return Some(version);
+                }
+            }
+        }
+    }
+
+    // If no version flag worked, try running the command without arguments
+    // Some apps print version info in help output
+    if let Ok(output) = Command::new(bin_name).output() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        if let Some(version) = extract_version_from_string(&stdout) {
+            if debug {
+                println!(
+                    "🔍 Version detected from '{} {}' help output: {}",
+                    bin_name, "(no args)", version
+                );
+            }
+            return Some(version);
+        }
+        if let Some(version) = extract_version_from_string(&stderr) {
+            if debug {
+                println!(
+                    "🔍 Version detected from '{} {}' help output (stderr): {}",
+                    bin_name, "(no args)", version
+                );
+            }
+            return Some(version);
+        }
+    }
+
+    if debug {
+        println!(
+            "⚠️  Could not detect version for '{}' using any method",
+            bin_name
+        );
+    }
+    None
 }
 
 /**
@@ -779,10 +863,27 @@ async fn get_latest_release_tag(repo: &str, debug: bool) -> Result<String> {
     }
 }
 
-/// Parse version from string defined as xxx.xxx.xxx format
+/// Parse version from string - handles various version formats
 fn extract_version_from_string(s: &str) -> Option<String> {
-    let re = Regex::new(r"(\d{1,5}\.\d{1,5}\.\d{1,5})").ok()?;
-    re.find(s).map(|m| m.as_str().to_string())
+    // Try different version patterns in order of preference
+    let patterns = [
+        r"(\d{1,5}\.\d{1,5}\.\d{1,5}(?:\.\d{1,5})?)", // x.y.z or x.y.z.w
+        r"v(\d{1,5}\.\d{1,5}\.\d{1,5}(?:\.\d{1,5})?)", // v-prefixed versions
+        r"version\s+(\d{1,5}\.\d{1,5}\.\d{1,5}(?:\.\d{1,5})?)", // "version x.y.z"
+        r"(\d{1,5}\.\d{1,5})",                        // x.y (two-part versions)
+    ];
+
+    for pattern in &patterns {
+        if let Ok(re) = Regex::new(pattern) {
+            if let Some(cap) = re.captures(s) {
+                if let Some(version) = cap.get(1) {
+                    return Some(version.as_str().to_string());
+                }
+            }
+        }
+    }
+
+    None
 }
 
 /// Preview installation steps for the given version and system information.
@@ -792,13 +893,19 @@ async fn preview_installation_steps(
     system_info: &SystemInfo,
     is_update: bool,
 ) -> Result<()> {
+    // Show current version detection in debug mode
+    if is_update {
+        println!("🔍 Checking current version:");
+        get_current_version_with_debug(&app.bin, true);
+    }
+
     match app.installation_method() {
         InstallationMethod::Template => {
             let _tag = get_latest_release_tag(app.get_repo(), true).await?;
             let url = build_download_url(app, version, system_info).await?;
-            println!("📥 Would download: {}", url);
+            println!("    📥 Would download: {}", url);
             println!(
-                "📦 Would extract and install binary to: {}",
+                "    📦 Would extract and install binary to: {}",
                 get_bin_dir()?.display()
             );
         }
@@ -810,12 +917,12 @@ async fn preview_installation_steps(
             };
 
             let processed_command = process_template(command, app, version, system_info).await?;
-            println!("🔧 Would run: {}", processed_command);
+            println!("    🔧 Would run: {}", processed_command);
         }
         InstallationMethod::Script => {
             let script = app.script.as_ref().unwrap();
             let processed_script = process_template(script, app, version, system_info).await?;
-            println!("📜 Would execute script: {}", processed_script);
+            println!("    📜 Would execute script: {}", processed_script);
         }
     }
     Ok(())
@@ -833,10 +940,10 @@ async fn execute_app_commands(
     is_update: bool,
 ) -> Result<()> {
     let command = if is_update && app.update_command.is_some() {
-        println!("🔄 Running update command...");
+        println!("    🔄 Running update command...");
         app.update_command.as_ref().unwrap()
     } else {
-        println!("🔄 Running install command...");
+        println!("    🔄 Running install command...");
         app.install_command.as_ref().unwrap()
     };
 
@@ -844,12 +951,16 @@ async fn execute_app_commands(
 
     let output = Command::new("sh")
         .arg("-c")
-        .arg(&processed_command)
+        .arg(format!("\"{}\"", processed_command))
         .output()?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(anyhow::anyhow!("Command failed: {}", stderr));
+        return Err(anyhow::anyhow!(
+            "\n    Command: {}\n    Error:     {}",
+            processed_command,
+            stderr
+        ));
     }
 
     Ok(())

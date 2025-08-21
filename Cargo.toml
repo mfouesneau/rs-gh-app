@@ -1,7 +1,11 @@
 [package]
 name = "rs-gh-app"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
+
+[[bin]]
+name = "rs-gh-app"
+path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4.4", features = ["derive"] }

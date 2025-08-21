@@ -12,6 +12,7 @@ This app aims to provide a robust solution for users who want to keep their tool
 
 - 🚀 **Automatic Updates**: Check for and install the latest versions of your favorite GitHub-released tools
 - 🏷️ **Intelligent Tag Detection**: Automatically detects correct release tags by following GitHub redirects (handles v1.2.3, 1.2.3, release-1.2.3, etc.)
+- 📊 **Semantic Version Comparison**: Uses proper semantic versioning to prevent unwanted downgrades (never updates from v1.2.0 to v1.1.0)
 - 🔧 **Flexible Configuration**: YAML-based configuration with multiple installation/update methods (github repo, command, script)
 - 🏃 **Dry Run Mode**: Preview what would be installed without actually doing it with verbose step-by-step output
 - 🏗️ **Architecture Detection**: Automatically detects your OS and architecture (Linux, macOS, Windows with x86_64/aarch64 support)
@@ -19,6 +20,7 @@ This app aims to provide a robust solution for users who want to keep their tool
 - 🔍 **Pixi Integration**: Automatically skips apps managed by pixi (others could be implemented)
 - 🛠️ **Custom Commands**: Support for separate install and update commands
 - 📥 **Download Function**: Built-in `{download(url, path)}` template function for custom installers
+- 🔧 **Robust Version Detection**: Tries multiple version flags (`--version`, `-V`, `-v`, `version`) and provides clear feedback
 - 📜 **Script Support**: Execute custom installation scripts with full templating support
 - ⚡ **GitHub API Integration**: Uses GitHub's API with rate limiting awareness and user-friendly time-to-reset messages
 
@@ -226,6 +228,7 @@ $ rs-gh-app check
 ✅ dust is already at the latest version (1.2.3)
 🆕 bat v0.24.0 -> v0.25.0 (update available)
 📦 zoxide v0.9.8 (not installed)
+✅ nerdfonts is already at the latest version (0.3.0)  # Local v0.3.0 > remote v0.2.0
 ℹ️  eza [pixi managed]
 
 $ rs-gh-app install --dry-run
@@ -293,6 +296,29 @@ The tool provides user-friendly error messages, including:
   ```
 - **Network Issues**: Clear messages for download failures and connectivity problems
 - **Installation Failures**: Detailed error output from failed commands or scripts
+- **Version Detection**: When apps don't support standard version flags or aren't installed:
+  ```
+  📦 app-name v1.2.3 (not installed or version not detectable)
+  ⚠️  app-name installed but version not detectable (binary may not support standard version flags)
+  ```
+
+## Version Detection
+
+The tool uses intelligent version detection that:
+
+- **Tries Multiple Flags**: Tests `--version`, `-V`, `-v`, and `version` in order
+- **Checks Multiple Outputs**: Examines both stdout and stderr for version information
+- **Fallback Detection**: If no version flag works, tries running the app without arguments to find version info in help output
+- **Pattern Matching**: Recognizes various version formats including:
+  - `x.y.z` and `x.y.z.w` (standard semantic versions)
+  - `vx.y.z` (v-prefixed versions)
+  - `version x.y.z` (verbose format)
+  - `x.y` (two-part versions)
+- **Semantic Version Comparison**: Uses proper semantic versioning to determine if updates are needed:
+  - Never suggests downgrading from v1.2.0 to v1.1.0
+  - Correctly handles pre-release versions (v1.0.0-beta < v1.0.0)
+  - Falls back to string comparison for non-semantic versions
+- **Debug Information**: In dry-run mode, shows which method successfully detected the version
 
 ## Contributing
 
