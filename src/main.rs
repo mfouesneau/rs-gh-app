@@ -1,4 +1,9 @@
+mod app;
 use anyhow::{Context, Result};
+use app::{
+    check_pixi_managed, extract_version_from_string, filter_apps, get_current_version,
+    get_current_version_with_debug, App, AppStatus, InstallationMethod,
+};
 use clap::{Parser, Subcommand};
 use regex::Regex;
 use semver::Version;
@@ -54,19 +59,8 @@ enum Commands {
 // app.yaml format =================================================
 
 #[derive(Debug, Deserialize, Serialize)]
-struct Config {
-    apps: Vec<App>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-struct App {
-    name: String,
-    bin: String,
-    repo: Option<String>,
-    template: Option<String>,
-    install_command: Option<String>,
-    update_command: Option<String>,
-    script: Option<String>,
+pub struct Config {
+    pub apps: Vec<App>,
 }
 
 // Internal information ============================================
@@ -79,67 +73,21 @@ struct SystemInfo {
     suffix: String,
 }
 
-// app information
-#[derive(Debug)]
-struct AppStatus {
-    app: App,
-    current_version: Option<String>,
-    latest_version: Option<String>,
-    needs_install: bool,
-    pixi_managed: bool,
-}
-
-// implement methods of App
-impl App {
-    /**
-     * Get the template for the app archive filename
-     */
-    fn get_template(&self) -> String {
-        self.template
-            .clone()
-            .unwrap_or_else(|| "{bin}-v{version}-{suffix}.tar.gz".to_string())
-    }
-
-    /**
-     * Check if the app has a repository
-     */
-    fn has_repo(&self) -> bool {
-        self.repo.is_some()
-    }
-
-    /**
-     * Get the repository short-URL for the app
-     */
-    fn get_repo(&self) -> &str {
-        self.repo.as_ref().map_or("", |v| v)
-    }
-
-    /**
-     * Get the installation method for the app whether it is a command a script
-     * or a github template
-     */
-    fn installation_method(&self) -> InstallationMethod {
-        if self.install_command.is_some() || self.update_command.is_some() {
-            InstallationMethod::Commands
-        } else if self.script.is_some() {
-            InstallationMethod::Script
-        } else {
-            InstallationMethod::Template
-        }
-    }
-}
-
-#[derive(Debug)]
-enum InstallationMethod {
-    Template, // Standard GitHub release download
-    Commands, // Custom install/update commands
-    Script,   // Custom script execution
-}
-
 // CLI main definition ==============================================
 
-// check for a configuration file in order: provided, in the current directory, the directory of the binary.
-fn locate_config_file(config_file: &str) -> Result<PathBuf> {
+/// check for a configuration file in order or priority:
+/// provided path, in the current directory, and the directory of the binary.
+/// default configuration file name "apps.yaml"
+///
+/// # Arguments
+///
+/// * `config_file` - The path to the configuration file.
+///
+/// # Returns
+///
+/// A `Result` which is `Ok` if the configuration was loaded successfully,
+/// or `Err` if there was an error.
+pub fn locate_config_file(config_file: &str) -> Result<PathBuf> {
     let current_dir = env::current_dir()?;
     let binary_dir = env::current_exe()?.parent().unwrap().to_path_buf();
 
@@ -160,12 +108,19 @@ fn locate_config_file(config_file: &str) -> Result<PathBuf> {
     Err(anyhow::anyhow!("No configuration file found"))
 }
 
-/**
- * Load the configuration from the given file.
- *
- * This function reads the configuration file and returns a `Config` struct.
- * If the file does not exist, it creates a sample configuration file.
- */
+/// Load the configuration from the given file.
+///
+/// This function reads the configuration file and returns a `Config` struct.
+/// If the file does not exist, it creates a sample configuration file.
+///
+/// # Arguments
+///
+/// * `config_file` - The path to the configuration file.
+///
+/// # Returns
+///
+/// A `Result` which is `Ok` if the configuration was loaded successfully,
+/// or `Err` if there was an error.
 async fn load_config(config_file: &str) -> Result<Config> {
     let config_path = locate_config_file(config_file);
 
@@ -184,30 +139,16 @@ async fn load_config(config_file: &str) -> Result<Config> {
     Ok(config)
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let cli = Cli::parse();
-
-    let config = load_config(&cli.config).await?;
-    let system_info = detect_system_info()?;
-
-    match cli.command {
-        Commands::Install { app_name, dry_run } => {
-            let apps = filter_apps(&config.apps, app_name)?;
-            install_apps(apps, &system_info, dry_run, cli.stop_on_error).await?;
-        }
-        Commands::Check { app_name } => {
-            let apps = filter_apps(&config.apps, app_name)?;
-            check_apps(apps, &system_info, cli.stop_on_error).await?;
-        }
-        Commands::SelfUpdate { dry_run } => {
-            self_update(&system_info, dry_run).await?;
-        }
-    }
-    Ok(())
-}
-
-// Generate a sample config file
+/// This function creates a sample configuration file with a few sample apps.
+///
+/// # Arguments
+///
+/// * `config_file` - The path to the configuration file.
+///
+/// # Returns
+///
+/// A `Result` which is `Ok` if the sample config file was created successfully,
+/// or `Err` if there was an error.
 async fn create_sample_config_file(config_file: &str) -> Result<()> {
     let sample_config = Config {
         apps: vec![
@@ -252,23 +193,28 @@ async fn create_sample_config_file(config_file: &str) -> Result<()> {
     Ok(())
 }
 
-/**
- * Filter the apps based on the given app name.
- *
- * If `app_name` is `None`, all apps are returned.
- * If `app_name` is `Some(name)`, the app with the given name is returned.
- */
-fn filter_apps(apps: &[App], app_name: Option<String>) -> Result<Vec<App>> {
-    match app_name {
-        Some(name) => {
-            let app = apps
-                .iter()
-                .find(|app| app.name == name || app.bin == name)
-                .ok_or_else(|| anyhow::anyhow!("App '{}' not found in configuration", name))?;
-            Ok(vec![app.clone()])
+/// Main CLI entry point.
+#[tokio::main]
+async fn main() -> Result<()> {
+    let cli = Cli::parse();
+
+    let config = load_config(&cli.config).await?;
+    let system_info = detect_system_info()?;
+
+    match cli.command {
+        Commands::Install { app_name, dry_run } => {
+            let apps = filter_apps(&config.apps, app_name)?;
+            install_apps(apps, &system_info, dry_run, cli.stop_on_error).await?;
         }
-        None => Ok(apps.to_vec()),
+        Commands::Check { app_name } => {
+            let apps = filter_apps(&config.apps, app_name)?;
+            check_apps(apps, &system_info, cli.stop_on_error).await?;
+        }
+        Commands::SelfUpdate { dry_run } => {
+            self_update(&system_info, dry_run).await?;
+        }
     }
+    Ok(())
 }
 
 /**
@@ -652,31 +598,6 @@ fn get_bin_dir() -> Result<PathBuf> {
     }
 }
 
-// Pixi-related functions ======================================================
-
-fn check_pixi_managed(bin_name: &str) -> bool {
-    if !Command::new("pixi").arg("--version").output().is_ok() {
-        return false;
-    }
-
-    let output = Command::new("pixi")
-        .args(["global", "list", bin_name])
-        .output();
-
-    if let Ok(output) = output {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        !stdout.contains("No global environments found")
-    } else {
-        false
-    }
-}
-
-// Get current / latest versions ===============================================
-
-fn get_current_version(bin_name: &str) -> Option<String> {
-    get_current_version_with_debug(bin_name, false)
-}
-
 fn is_version_update_needed(current: &Option<String>, latest: &str) -> bool {
     match current {
         None => true, // Not installed, so update needed
@@ -691,74 +612,6 @@ fn is_version_update_needed(current: &Option<String>, latest: &str) -> bool {
             }
         }
     }
-}
-
-fn get_current_version_with_debug(bin_name: &str, debug: bool) -> Option<String> {
-    // Try different version flags in order of preference
-    let version_flags = ["--version", "-V", "-v", "version"];
-
-    for flag in &version_flags {
-        if let Ok(output) = Command::new(bin_name).arg(flag).output() {
-            if output.status.success() {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                let stderr = String::from_utf8_lossy(&output.stderr);
-
-                // Try to extract version from stdout first, then stderr
-                if let Some(version) = extract_version_from_string(&stdout) {
-                    if debug {
-                        println!(
-                            "🔍 Version detected using '{} {}': {}",
-                            bin_name, flag, version
-                        );
-                    }
-                    return Some(version);
-                }
-                if let Some(version) = extract_version_from_string(&stderr) {
-                    if debug {
-                        println!(
-                            "🔍 Version detected using '{} {}' (from stderr): {}",
-                            bin_name, flag, version
-                        );
-                    }
-                    return Some(version);
-                }
-            }
-        }
-    }
-
-    // If no version flag worked, try running the command without arguments
-    // Some apps print version info in help output
-    if let Ok(output) = Command::new(bin_name).output() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-
-        if let Some(version) = extract_version_from_string(&stdout) {
-            if debug {
-                println!(
-                    "🔍 Version detected from '{} {}' help output: {}",
-                    bin_name, "(no args)", version
-                );
-            }
-            return Some(version);
-        }
-        if let Some(version) = extract_version_from_string(&stderr) {
-            if debug {
-                println!(
-                    "🔍 Version detected from '{} {}' help output (stderr): {}",
-                    bin_name, "(no args)", version
-                );
-            }
-            return Some(version);
-        }
-    }
-
-    if debug {
-        println!(
-            "⚠️  Could not detect version for '{}' using any method",
-            bin_name
-        );
-    }
-    None
 }
 
 /**
@@ -861,29 +714,6 @@ async fn get_latest_release_tag(repo: &str, debug: bool) -> Result<String> {
             repo
         )),
     }
-}
-
-/// Parse version from string - handles various version formats
-fn extract_version_from_string(s: &str) -> Option<String> {
-    // Try different version patterns in order of preference
-    let patterns = [
-        r"(\d{1,5}\.\d{1,5}\.\d{1,5}(?:\.\d{1,5})?)", // x.y.z or x.y.z.w
-        r"v(\d{1,5}\.\d{1,5}\.\d{1,5}(?:\.\d{1,5})?)", // v-prefixed versions
-        r"version\s+(\d{1,5}\.\d{1,5}\.\d{1,5}(?:\.\d{1,5})?)", // "version x.y.z"
-        r"(\d{1,5}\.\d{1,5})",                        // x.y (two-part versions)
-    ];
-
-    for pattern in &patterns {
-        if let Ok(re) = Regex::new(pattern) {
-            if let Some(cap) = re.captures(s) {
-                if let Some(version) = cap.get(1) {
-                    return Some(version.as_str().to_string());
-                }
-            }
-        }
-    }
-
-    None
 }
 
 /// Preview installation steps for the given version and system information.
