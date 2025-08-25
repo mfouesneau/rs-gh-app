@@ -1,4 +1,5 @@
 mod app;
+mod github;
 use anyhow::{Context, Result};
 use app::{
     check_pixi_managed, extract_version_from_string, filter_apps, get_current_version,
@@ -868,6 +869,16 @@ async fn process_download_functions(template: &str) -> Result<String> {
     Ok(result)
 }
 
+/// Downloads a file from the given URL and saves it to the specified destination path.
+///
+/// # Arguments
+///
+/// * `url` - The URL of the file to download.
+/// * `dest_path` - The destination path where the file should be saved.
+///
+/// # Returns
+///
+/// A `Result` containing the path of the downloaded file or an error.
 async fn download_file(url: &str, dest_path: &str) -> Result<String> {
     let client = reqwest::Client::new();
     let response = client
