@@ -10,9 +10,11 @@ use std::process::Command;
 pub struct App {
     pub name: String,
     pub bin: String,
+    pub description: Option<String>,
     pub repo: Option<String>,
     pub install_command: Option<String>,
     pub update_command: Option<String>,
+    pub version_command: Option<String>,
 }
 
 // app information

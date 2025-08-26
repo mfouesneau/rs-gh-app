@@ -172,6 +172,14 @@ impl Release {
             }
         }
     }
+
+    pub fn default() -> Self {
+        Self {
+            tag_name: String::new(),
+            html_url: String::new(),
+            assets: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

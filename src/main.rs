@@ -68,26 +68,31 @@ async fn create_sample_config_file(config_file: &str) -> Result<()> {
         apps: vec![
             App {
                 name: "dust".to_string(),
-                    bin: "dust".to_string(),
-                    repo: Some("bootandy/dust".to_string()),
-                    install_command: None,
-                    update_command: None,
-                },
-                App {
-                    name: "bat".to_string(),
-                    bin: "bat".to_string(),
-                    repo: Some("sharkdp/bat".to_string()),
-                    install_command: None,
-                    update_command: None,
-                },
-                App {
-                    name: "uv".to_string(),
-                    bin: "uv".to_string(),
-                    repo: Some("astral-sh/uv".to_string()),
-                    install_command: Some("{download(https://astral.sh/uv/install.sh, /tmp/uv-install.sh)} && sh /tmp/uv-install.sh --bin-dir {bin_dir} --yes".to_string()),
-                    update_command: Some("{bin_path} self update".to_string()),
-                },
-            ],
+                bin: "dust".to_string(),
+                repo: Some("bootandy/dust".to_string()),
+                description: Some("A disk usage analyzer".to_string()),
+                install_command: None,
+                update_command: None,
+                version_command: None,
+            },
+            App {
+                name: "bat".to_string(),
+                bin: "bat".to_string(),
+                description: Some("A cat clone with syntax highlighting".to_string()),
+                repo: Some("sharkdp/bat".to_string()),
+                install_command: None,
+                update_command: None,
+                version_command: None,
+            },
+            App {
+                name: "uv".to_string(),
+                bin: "uv".to_string(),
+                repo: Some("astral-sh/uv".to_string()),
+                install_command: Some("{download(https://astral.sh/uv/install.sh, /tmp/uv-install.sh)} && sh /tmp/uv-install.sh --bin-dir {bin_dir} --yes".to_string()),
+                update_command: Some("{bin_path} self update".to_string()),
+                description: Some("A fast python package manager".to_string()),
+                version_command: None,
+            }, ],
         };
 
     let yaml = serde_yaml::to_string(&sample_config)?;
@@ -149,12 +154,50 @@ async fn get_app_status_and_release(app: &App) -> Result<(AppStatus, Release)> {
 
     // check online assets and versions
     check_rate_limit(false).await?;
+
+    let release_info: Release;
     let repo = status.app.get_repo();
 
-    let release_info = Release::fetch_latest(repo, env::var("GITHUB_TOKEN").ok().as_deref()).await;
-
-    if let Some(latest_version) = extract_version_from_string(&release_info.tag_name) {
-        status.set_latest_version(latest_version);
+    // get version from repo is any
+    if repo.is_empty() {
+        release_info = Release::default();
+        // check if version_command is present
+        if app.version_command.is_some() {
+            let command = app.version_command.as_ref().unwrap();
+            let processed_command = process_template(command, app, "").await?;
+            println!(
+                "   ⚙️ Getting latest version for {} with command\n\t {} ",
+                app.name,
+                processed_command.trim()
+            );
+            let output = Command::new("sh")
+                .arg("-c")
+                .arg(format!("{}", processed_command))
+                .output()?;
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                return Err(anyhow::anyhow!(
+                    "\n    Command: {}\n    Error:     {}",
+                    processed_command,
+                    stderr
+                ));
+            } else {
+                // merge stdout into a string
+                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                // parse stdout into a version
+                if let Some(version) = extract_version_from_string(&stdout) {
+                    println!("   ⚙️ Got {}", version.clone());
+                    status.set_latest_version(version);
+                } else {
+                    println!("  ❓ Could not parse version from {}", stdout);
+                }
+            }
+        }
+    } else {
+        release_info = Release::fetch_latest(repo, env::var("GITHUB_TOKEN").ok().as_deref()).await;
+        if let Some(latest_version) = extract_version_from_string(&release_info.tag_name) {
+            status.set_latest_version(latest_version);
+        }
     }
 
     Ok((status, release_info))
@@ -182,6 +225,8 @@ async fn get_thisapp_status_and_release() -> Result<(AppStatus, Release)> {
             bin: "rs-gh-app".to_string(),
             install_command: None,
             update_command: None,
+            description: Some("A command-line tool for managing GitHub applications".to_string()),
+            version_command: None,
         },
     };
 
