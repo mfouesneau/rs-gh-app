@@ -43,7 +43,7 @@ pub struct Release {
 }
 
 /// Check the GitHub API rate limit and print the remaining limit and reset time.
-pub async fn check_rate_limit() -> Result<()> {
+pub async fn check_rate_limit(verbose: bool) -> Result<()> {
     let client = reqwest::Client::new();
 
     // Check rate limit first
@@ -78,12 +78,14 @@ pub async fn check_rate_limit() -> Result<()> {
                 };
 
                 if remaining > 0 {
-                    println!("✅  Rate limit remaining: {}", remaining);
-                    println!(
-                        "ℹ️  Rate limit reset at: {} {}",
-                        reset_datetime.format("%Y-%m-%d %H:%M:%S UTC"),
-                        delta_str
-                    );
+                    if verbose {
+                        println!("✅  Rate limit remaining: {}", remaining);
+                        println!(
+                            "ℹ️  Rate limit reset at: {} {}",
+                            reset_datetime.format("%Y-%m-%d %H:%M:%S UTC"),
+                            delta_str
+                        );
+                    }
                     return Ok(());
                 }
 

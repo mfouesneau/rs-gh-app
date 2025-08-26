@@ -2,31 +2,24 @@ apps:
   - name: bat
     bin: bat
     repo: sharkdp/bat
-    template: "{bin}-v{version}-{suffix}.tar.gz"
   - name: bottom
     bin: btm
     repo: ClementTsang/bottom
-    template: "{name}_{suffix}.tar.gz"
   - name: delta
     bin: delta
     repo: dandavison/delta
-    template: "{bin}-{version}-{suffix}.tar.gz"
   - name: duf
     bin: duf
     repo: muesli/duf
-    template: "{bin}_{version}_{os}_{arch}.tar.gz"
   - name: dust
     bin: dust
     repo: bootandy/dust
-    template: "{bin}-v{version}-{suffix}.tar.gz"
   - name: eza
     bin: eza
     repo: eza-community/eza
-    template: "{bin}-{version}-{suffix}.tar.gz"
   - name: fd
     bin: fd
     repo: sharkdp/fd
-    template: "{bin}-v{version}-{suffix}.tar.gz"
   - name: fzf
     bin: fzf
     repo: junegunn/fzf
@@ -36,7 +29,7 @@ apps:
     bin: getnf
     repo: getnf/getnf
     install_command: "{download(https://raw.githubusercontent.com/getnf/getnf/main/install.sh, /tmp/getnf-install.sh)} && sh /tmp/getnf-install.sh && getnf -i Meslo"
-    update_command: "getnf -U Meslo || true"
+    update_command: "getnf -U || true"
   - name: pixi
     bin: pixi
     repo: prefix-dev/pixi
@@ -45,7 +38,6 @@ apps:
   - name: ripgrep
     bin: rg
     repo: BurntSushi/ripgrep
-    template: "{name}-{version}-{suffix}.tar.gz"
   - name: starship
     bin: starship
     repo: starship/starship
@@ -62,7 +54,6 @@ apps:
   - name: zoxide
     bin: zoxide
     repo: ajeetdsouza/zoxide
-    template: "{bin}-{version}-{suffix}.tar.gz"
 
   # Script-based installation example (commented out)
   #- name: nerdfonts

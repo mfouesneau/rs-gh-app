@@ -1,5 +1,5 @@
-use anyhow::Result;
 use regex::Regex;
+use semver::Version;
 /// Defines application information and its details.
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -11,10 +11,23 @@ pub struct App {
     pub name: String,
     pub bin: String,
     pub repo: Option<String>,
-    pub template: Option<String>,
     pub install_command: Option<String>,
     pub update_command: Option<String>,
-    pub script: Option<String>,
+}
+
+// app information
+#[derive(Debug)]
+pub struct AppStatus {
+    pub app: App,
+    pub current_version: Option<String>,
+    pub latest_version: Option<String>,
+    pub pixi_managed: Option<bool>,
+}
+
+#[derive(Debug)]
+pub enum InstallationMethod {
+    GitHub,   // Direct download from GitHub releases
+    Commands, // Custom install/update commands
 }
 
 impl fmt::Display for App {
@@ -31,41 +44,58 @@ impl fmt::Display for App {
     }
 }
 
-#[derive(Debug)]
-pub enum InstallationMethod {
-    Template, // Standard GitHub release download
-    Commands, // Custom install/update commands
-    Script,   // Custom script execution
-}
+/// * Print the status of the given app.
+///  *
+///  * If `pixi_managed` is `true`, the function will print a message indicating that the app is managed by pixi.
+///  * If `pixi_managed` is `false`, the function will print a message indicating the current and latest versions of the app.
+impl fmt::Display for AppStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_pixi_managed() {
+            return match &self.current_version {
+                Some(version) => write!(f, "ℹ️  {} ({}) [pixi managed]", self.app.name, version),
+                None => write!(f, "ℹ️  {} [pixi managed]", self.app.name),
+            };
+        }
 
-// app information
-#[derive(Debug)]
-pub struct AppStatus {
-    pub app: App,
-    pub current_version: Option<String>,
-    pub latest_version: Option<String>,
-    pub needs_install: bool,
-    pub pixi_managed: bool,
+        match (&self.current_version, &self.latest_version) {
+            (Some(current), Some(latest)) => {
+                if self.is_version_update_needed() {
+                    write!(
+                        f,
+                        "🆕 {} v{} -> v{} (update available)",
+                        self.app.name, current, latest
+                    )
+                } else {
+                    write!(
+                        f,
+                        "✅ {} is already at the latest version ({})",
+                        self.app.name, current
+                    )
+                }
+            }
+            (None, Some(latest)) => {
+                write!(
+                    f,
+                    "📦 {} v{} (not installed or version not detectable)",
+                    self.app.name, latest
+                )
+            }
+            (Some(current), None) => {
+                write!(
+                    f,
+                    "❓ {} v{} (could not check for updates or latest version not detectable)",
+                    self.app.name, current
+                )
+            }
+            _ => {
+                write!(f, "❓ {} (version unknown)", self.app.name)
+            }
+        }
+    }
 }
 
 // implement methods of App
 impl App {
-    /**
-     * Get the template for the app archive filename
-     */
-    pub fn get_template(&self) -> String {
-        self.template
-            .clone()
-            .unwrap_or_else(|| "{bin}-v{version}-{suffix}.tar.gz".to_string())
-    }
-
-    /**
-     * Check if the app has a repository
-     */
-    pub fn has_repo(&self) -> bool {
-        self.repo.is_some()
-    }
-
     /**
      * Get the repository short-URL for the app
      */
@@ -74,41 +104,15 @@ impl App {
     }
 
     /**
-     * Get the installation method for the app whether it is a command a script
+     * Get the installation method for the app whether it is a command
      * or a github template
      */
     pub fn installation_method(&self) -> InstallationMethod {
         if self.install_command.is_some() || self.update_command.is_some() {
             InstallationMethod::Commands
-        } else if self.script.is_some() {
-            InstallationMethod::Script
         } else {
-            InstallationMethod::Template
+            InstallationMethod::GitHub
         }
-    }
-}
-
-/// Filter the apps based on the given app name.
-///
-/// If `app_name` is `None`, all apps are returned.
-/// If `app_name` is `Some(name)`, the app with the given name is returned.
-///
-/// # Arguments
-/// * `apps` - The list of apps to filter.
-/// * `app_name` - The name of the app to filter by.
-///
-/// # Returns
-/// A `Result` containing a vector of `App` structs.
-pub fn filter_apps(apps: &[App], app_name: Option<String>) -> Result<Vec<App>> {
-    match app_name {
-        Some(name) => {
-            let app = apps
-                .iter()
-                .find(|app| app.name == name || app.bin == name)
-                .ok_or_else(|| anyhow::anyhow!("App '{}' not found in configuration", name))?;
-            Ok(vec![app.clone()])
-        }
-        None => Ok(apps.to_vec()),
     }
 }
 
@@ -133,6 +137,51 @@ pub fn check_pixi_managed(bin_name: &str) -> bool {
         !stdout.contains("No global environments found")
     } else {
         false
+    }
+}
+
+impl AppStatus {
+    pub fn new(app: &App) -> Self {
+        Self {
+            pixi_managed: Some(check_pixi_managed(&app.bin)),
+            current_version: get_current_version_with_debug(&app.bin, false),
+            latest_version: None,
+            app: app.clone(),
+        }
+    }
+    pub fn is_pixi_managed(&self) -> bool {
+        self.pixi_managed.clone().unwrap_or(false)
+    }
+    pub fn set_latest_version(&mut self, version: String) {
+        self.latest_version = Some(version);
+    }
+
+    /// Check if a version update is needed.
+    ///
+    /// This function compares the current version with the latest version.
+    /// If the latest version is greater than the current version, an update is needed.
+    /// If the versions cannot be parsed as semantic versions, a string comparison is used.
+    ///
+    /// Returns `true` if an update is needed, `false` otherwise.
+    pub fn is_version_update_needed(&self) -> bool {
+        match (&self.current_version, &self.latest_version) {
+            (None, None) => false,   // No idea, so do nothing
+            (None, Some(_)) => true, // Not installed, so update needed
+            (Some(current_ver), Some(latest_ver)) => {
+                // Try to parse both versions as semantic versions
+                match (Version::parse(current_ver), Version::parse(latest_ver)) {
+                    (Ok(current_semver), Ok(latest_semver)) => latest_semver > current_semver,
+                    _ => {
+                        // Fall back to string comparison if parsing fails
+                        current_ver != latest_ver
+                    }
+                }
+            }
+            (Some(_), None) => {
+                // Not installed, no update information
+                false
+            }
+        }
     }
 }
 
@@ -212,17 +261,6 @@ pub fn get_current_version_with_debug(bin_name: &str, debug: bool) -> Option<Str
     None
 }
 
-/// Get the current version of the given binary.
-///
-/// # Arguments
-/// * `bin_name` - The name of the binary to check.
-///
-/// # Returns
-/// The current version of the binary, or None if it could not be determined.
-pub fn get_current_version(bin_name: &str) -> Option<String> {
-    get_current_version_with_debug(bin_name, false)
-}
-
 /// Parse version from string - handles various version formats
 pub fn extract_version_from_string(s: &str) -> Option<String> {
     // Try different version patterns in order of preference
@@ -242,6 +280,5 @@ pub fn extract_version_from_string(s: &str) -> Option<String> {
             }
         }
     }
-
     None
 }
