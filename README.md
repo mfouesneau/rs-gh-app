@@ -13,7 +13,7 @@ This app aims to provide a robust solution for users who want to keep their tool
 - 🚀 **Automatic Updates**: Check for and install the latest versions of your favorite GitHub-released tools
 - 🏷️ **Intelligent Tag Detection**: Automatically detects correct release tags by following GitHub redirects (handles v1.2.3, 1.2.3, release-1.2.3, etc.)
 - 📊 **Semantic Version Comparison**: Uses proper semantic versioning to prevent unwanted downgrades (never updates from v1.2.0 to v1.1.0)
-- 🔧 **Flexible Configuration**: YAML-based configuration with multiple installation/update methods (github repo, command, script)
+- 🔧 **Flexible Configuration**: YAML-based configuration with multiple installation/update methods (github repo, command)
 - 🏃 **Dry Run Mode**: Preview what would be installed without actually doing it with verbose step-by-step output
 - 🏗️ **Architecture Detection**: Automatically detects your OS and architecture (Linux, macOS, Windows with x86_64/aarch64 support)
 - 📦 **Multiple Archive Formats**: Supports tar, tar.gz, and zip archives
@@ -21,8 +21,7 @@ This app aims to provide a robust solution for users who want to keep their tool
 - 🛠️ **Custom Commands**: Support for separate install and update commands
 - 📥 **Download Function**: Built-in `{download(url, path)}` template function for custom installers
 - 🔧 **Robust Version Detection**: Tries multiple version flags (`--version`, `-V`, `-v`, `version`) and provides clear feedback
-- 📜 **Script Support**: Execute custom installation scripts with full templating support
-- ⚡ **GitHub API Integration**: Uses GitHub's API with rate limiting awareness and user-friendly time-to-reset messages
+- ⚡ **GitHub API Integration**: Uses GitHub's API with rate limiting awareness to get the latest release information and possible archives.
 
 ## Installation
 
@@ -62,12 +61,10 @@ apps:
   - name: bottom
     bin: btm
     repo: ClementTsang/bottom
-    template: "{name}_{suffix}.tar.gz"
 
   - name: "zoxide"
     bin: "zoxide"
     repo: "ajeetdsouza/zoxide"
-    template: "{bin}-{version}-{suffix}.tar.gz"
 
   # Custom install/update commands with download function
   - name: "uv"
@@ -75,11 +72,6 @@ apps:
     repo: "astral-sh/uv"  # For version checking
     install_command: "{download(https://astral.sh/uv/install.sh, /tmp/uv-install.sh)} && sh /tmp/uv-install.sh --bin-dir {bin_dir} --yes"
     update_command: "{bin_path} self update"
-
-  # Script-based installation
-  - name: "nerdfonts"
-    bin: "nerd-font-patcher"
-    script: "{app_path}/scripts/install-nerdfonts.sh {bin_dir} {version}"
 ```
 
 ### Configuration Fields
@@ -88,21 +80,17 @@ apps:
 - **name**: Display name for the application
 - **bin**: Binary name (used for version checking and as the installed filename)
 
-#### Installation Methods (choose one per entry)
+#### Installation Methods
 
 You can mix different installation methods in the same configuration file, allowing you to manage both standard GitHub releases and custom installers in one place.
 
 1. **Standard GitHub Releases**: The traditional method using GitHub releases with customizable URL templates. Perfect for most GitHub projects that follow standard release patterns.
    - **repo**: GitHub repository in format `owner/repo`
-   - **template**: URL filename template with placeholders
 
 2. **Custom Commands**: For applications with custom installers (like uv, rustup, etc.) that provide their own installation and update scripts
    - **repo**: (optional) GitHub repository for version checking
    - **install_command**: Command to run for installation
    - **update_command**: (optional) Command to run for updates
-
-3. **Custom Scripts**: For complex installation scenarios that require custom logic. Execute your own scripts with full access to template variables.
-   - **script**: Path to script to execute for installation
 
 #### Template Variables
 
@@ -322,6 +310,10 @@ The tool uses intelligent version detection that:
 
 ## Contributing
 
+New contributions and contributors are very welcome!
+
+Please open a new issue or new pull request for bugs, feedback, or new features you would like to see. If there is an issue you would like to work on, please leave a comment, and we will be happy to assist.
+
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
@@ -331,21 +323,3 @@ The tool uses intelligent version detection that:
 ## License
 
 This project is licensed under the BSD-3 Clause License - see the [LICENSE](LICENSE) file for details.
-
-## Advanced Examples
-
-### Custom Installer with Download Function
-```yaml
-- name: "rustup"
-  bin: "rustup"
-  install_command: "{download(https://sh.rustup.rs, /tmp/rustup.sh)} && sh /tmp/rustup.sh -y --default-toolchain stable"
-  update_command: "{bin_path} update"
-```
-
-### Script-based Installation
-```yaml
-- name: "my-app"
-  bin: "my-app"
-  repo: "user/my-app"  # For version checking
-  script: "{app_path}/scripts/install-my-app.sh {bin_dir} {version} {os} {arch}"
-```
