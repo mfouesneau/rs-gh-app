@@ -25,6 +25,13 @@ This app aims to provide a robust solution for users who want to keep their tool
 
 ## Installation
 
+### Installation Script
+
+On macOS and Linux.
+```
+curl -LsSf https://raw.githubusercontent.com/mfouesneau/rs-gh-app/refs/heads/main/install.sh | sh
+```
+
 ### Precompiled Binary Installation
 
 You can download pre-built binaries from the [releases page](https://github.com/mfouesneau/rs-gh-app/releases).
