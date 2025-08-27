@@ -29,7 +29,7 @@ This app aims to provide a robust solution for users who want to keep their tool
 
 On macOS and Linux.
 ```
-curl -LsSf https://raw.githubusercontent.com/mfouesneau/rs-gh-app/refs/heads/main/install.sh | sh
+curl -LsSf https://github.com/mfouesneau/rs-gh-app/raw/main/install.sh | sh
 ```
 
 ### Precompiled Binary Installation
