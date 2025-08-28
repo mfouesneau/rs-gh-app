@@ -143,10 +143,10 @@ pub fn check_pixi_managed(bin_name: &str) -> bool {
 }
 
 impl AppStatus {
-    pub fn new(app: &App) -> Self {
+    pub fn new(app: &App, debug: bool) -> Self {
         Self {
             pixi_managed: Some(check_pixi_managed(&app.bin)),
-            current_version: get_current_version_with_debug(&app.bin, false),
+            current_version: get_current_version_with_debug(&app.bin, debug),
             latest_version: None,
             app: app.clone(),
         }
@@ -209,7 +209,7 @@ pub fn get_current_version_with_debug(bin_name: &str, debug: bool) -> Option<Str
                 if let Some(version) = extract_version_from_string(&stdout) {
                     if debug {
                         println!(
-                            "🔍 Version detected using '{} {}': {}",
+                            "🩺 [DEBUG] Version detected using '{} {}': {}",
                             bin_name, flag, version
                         );
                     }
@@ -218,7 +218,7 @@ pub fn get_current_version_with_debug(bin_name: &str, debug: bool) -> Option<Str
                 if let Some(version) = extract_version_from_string(&stderr) {
                     if debug {
                         println!(
-                            "🔍 Version detected using '{} {}' (from stderr): {}",
+                            "🩺 [DEBUG] Version detected using '{} {}' (from stderr): {}",
                             bin_name, flag, version
                         );
                     }
@@ -237,7 +237,7 @@ pub fn get_current_version_with_debug(bin_name: &str, debug: bool) -> Option<Str
         if let Some(version) = extract_version_from_string(&stdout) {
             if debug {
                 println!(
-                    "🔍 Version detected from '{} {}' help output: {}",
+                    "🩺 [DEBUG] Version detected from '{} {}' help output: {}",
                     bin_name, "(no args)", version
                 );
             }
@@ -246,7 +246,7 @@ pub fn get_current_version_with_debug(bin_name: &str, debug: bool) -> Option<Str
         if let Some(version) = extract_version_from_string(&stderr) {
             if debug {
                 println!(
-                    "🔍 Version detected from '{} {}' help output (stderr): {}",
+                    "🩺 [DEBUG] Version detected from '{} {}' help output (stderr): {}",
                     bin_name, "(no args)", version
                 );
             }
@@ -256,7 +256,7 @@ pub fn get_current_version_with_debug(bin_name: &str, debug: bool) -> Option<Str
 
     if debug {
         println!(
-            "⚠️  Could not detect version for '{}' using any method",
+            "🩺⚠️ [DEBUG] Could not detect version for '{}' using any method",
             bin_name
         );
     }

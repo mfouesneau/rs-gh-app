@@ -149,8 +149,8 @@ async fn load_config(config_file: &str) -> Result<Config> {
 /// # Returns
 ///
 /// A `Result` containing a tuple with the application status and the latest release information.
-async fn get_app_status_and_release(app: &App) -> Result<(AppStatus, Release)> {
-    let mut status = AppStatus::new(app);
+async fn get_app_status_and_release(app: &App, debug: bool) -> Result<(AppStatus, Release)> {
+    let mut status = AppStatus::new(app, debug);
 
     // check online assets and versions
     check_rate_limit(false).await?;
@@ -281,6 +281,10 @@ struct Cli {
     /// Path to the configuration file
     #[arg(short, long, default_value = "apps.yaml")]
     config: String,
+
+    /// Debug mode
+    #[arg(long)]
+    debug: bool,
 }
 
 /// Get the directory where binaries are stored
@@ -691,9 +695,9 @@ async fn self_update(dry_run: bool) -> Result<()> {
  * If `stop_on_error` is `true`, the function will stop checking apps if an error occurs.
  * If `stop_on_error` is `false`, the function will continue checking apps even if an error occurs.
  */
-async fn check_apps(apps: Vec<App>, stop_on_error: bool) -> Result<()> {
+async fn check_apps(apps: Vec<App>, stop_on_error: bool, debug: bool) -> Result<()> {
     for app in apps {
-        match get_app_status_and_release(&app).await {
+        match get_app_status_and_release(&app, debug).await {
             Ok((status, _)) => {
                 println!("{}", status);
             }
@@ -874,7 +878,7 @@ async fn execute_app_commands(
 
     let output = Command::new("sh")
         .arg("-c")
-        .arg(format!("\"{}\"", processed_command))
+        .arg(&processed_command)
         .output()?;
 
     if !output.status.success() {
@@ -901,8 +905,8 @@ async fn execute_app_commands(
 /// # Errors
 ///
 /// This function will return an error if the app cannot be installed.
-async fn install_app(app: &App, dry_run: bool) -> Result<()> {
-    let (status, release) = get_app_status_and_release(app).await?;
+async fn install_app(app: &App, dry_run: bool, debug: bool) -> Result<()> {
+    let (status, release) = get_app_status_and_release(app, debug).await?;
 
     if status.pixi_managed.unwrap_or(false) {
         println!("{}", status);
@@ -954,7 +958,7 @@ async fn install_app(app: &App, dry_run: bool) -> Result<()> {
 
     // Verify installation
     if !dry_run {
-        if let Some(version) = app::get_current_version_with_debug(&app.bin, false) {
+        if let Some(version) = app::get_current_version_with_debug(&app.bin, debug) {
             println!("✅ {} v{} installed successfully", app.name, version);
         } else {
             println!(
@@ -977,9 +981,14 @@ async fn install_app(app: &App, dry_run: bool) -> Result<()> {
 /// If `dry_run` is `true`, the function will only print the installation commands without actually installing the apps.
 /// If `stop_on_error` is `true`, the function will stop installing apps if an error occurs.
 /// If `stop_on_error` is `false`, the function will continue installing apps even if an error occurs.
-async fn install_apps(apps: Vec<App>, dry_run: bool, stop_on_error: bool) -> Result<()> {
+async fn install_apps(
+    apps: Vec<App>,
+    dry_run: bool,
+    stop_on_error: bool,
+    debug: bool,
+) -> Result<()> {
     for app in apps {
-        let result = install_app(&app, dry_run).await;
+        let result = install_app(&app, dry_run, debug).await;
 
         if let Err(e) = result {
             eprintln!("❌ Failed to install {}: {}", app.name, e);
@@ -997,14 +1006,21 @@ async fn main() -> Result<()> {
 
     let config = load_config(&cli.config).await?;
 
+    if cli.debug {
+        // Check current PATH
+        if let Ok(path_var) = env::var("PATH") {
+            println!("🩺 [DEBUG] Current PATH: {}", path_var);
+        }
+    }
+
     match cli.command {
         Commands::Install { app_name, dry_run } => {
             let apps = filter_apps(&config.apps, app_name)?;
-            install_apps(apps, dry_run, cli.stop_on_error).await?;
+            install_apps(apps, dry_run, cli.stop_on_error, cli.debug).await?;
         }
         Commands::Check { app_name } => {
             let apps = filter_apps(&config.apps, app_name)?;
-            check_apps(apps, cli.stop_on_error).await?;
+            check_apps(apps, cli.stop_on_error, cli.debug).await?;
         }
         Commands::SelfUpdate { dry_run } => {
             self_update(dry_run).await?;
