@@ -250,6 +250,18 @@ impl Default for PlatformMatcher {
     }
 }
 
+/// Create a matcher for the current platform.
+///
+/// This function creates a matcher for the current platform based on the
+/// operating system and architecture as being contained in the asset name.
+///
+/// # Arguments
+/// * `asset_name` - The name of the asset to match.
+/// * `matcher` - The matcher to use for matching.
+/// * `current_platform` - The current platform to match against.
+///
+/// # Returns
+/// A `Result` containing the matched platform or an error.
 pub fn asset_matcher(
     asset_name: &str,
     matcher: Option<&PlatformMatcher>,
@@ -313,10 +325,63 @@ pub fn find_platform_assets<'a>(
         None => &Platform::current(),
     };
 
-    let matched_assets = assets
+    let mut matched_assets: Vec<_> = assets
         .iter()
         .filter(|asset| asset_matcher(&asset.name, Some(&matcher), Some(&current_platform)).is_ok())
-        .collect::<Vec<_>>();
+        .map(|asset| {
+            (
+                asset,
+                calculate_asset_priority(&asset, Some(&current_platform)),
+            )
+        })
+        .collect();
 
-    Ok(matched_assets)
+    if matched_assets.is_empty() {
+        return Err(anyhow::anyhow!("No match found"));
+    } else if matched_assets.len() > 1 {
+        matched_assets.sort_by(|a, b| b.1.cmp(&a.1));
+    }
+
+    let sorted_assets: Vec<&Asset> = matched_assets.iter().map(|(asset, _)| *asset).collect();
+
+    Ok(sorted_assets)
+}
+
+fn calculate_asset_priority(asset: &Asset, current_platform: Option<&Platform>) -> i32 {
+    // provide default matcher and platform if not provided
+    let current_platform = match current_platform {
+        Some(p) => p,
+        None => &Platform::current(),
+    };
+    let name = asset.name.to_lowercase();
+    let mut priority: i32 = 0;
+
+    // priority for usual archives (instead of deb, rpm, apk etc.)
+    if name.ends_with(".tar.gz")
+        || name.ends_with(".tar")
+        || name.ends_with(".tgz")
+        || name.ends_with(".zip")
+    {
+        priority += 1000;
+    }
+
+    // priority for platform-specific coherence
+    if current_platform.os == "linux" && name.contains("android") {
+        priority -= 2000;
+    }
+    if current_platform.os == "macos" && name.contains("ios") {
+        priority -= 2000;
+    }
+
+    // priority for coherent architecture
+    if current_platform.arch == "x86_64" && (name.contains("arm") || name.contains("aarch64")) {
+        priority -= 1000;
+    }
+
+    // prefer musl over gnu for linux
+    if current_platform.os == "linux" && name.contains("musl") {
+        priority += 500;
+    }
+
+    priority
 }
