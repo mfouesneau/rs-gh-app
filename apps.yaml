@@ -2,27 +2,34 @@ apps:
   - name: bat
     bin: bat
     repo: sharkdp/bat
+    desc: fancy cat with syntax and formatting perks.
   - name: bottom
     bin: btm
     repo: ClementTsang/bottom
+    description: a rust-based TUI cross-platform process/system monitor.
   - name: delta
     bin: delta
     repo: dandavison/delta
+    description: A fancy diff.
   - name: duf
     bin: duf
     repo: muesli/duf
+    description: a better 'df' alternative.
   - name: dust
     bin: dust
     repo: bootandy/dust
   - name: eza
     bin: eza
     repo: eza-community/eza
+    description: a modern, maintained replacement for ls
   - name: fd
     bin: fd
     repo: sharkdp/fd
+    description: a faster, user-friendly alternative to find.
   - name: fzf
     bin: fzf
     repo: junegunn/fzf
+    description: fuzzy file completion.
     install_command: |
       git clone --depth 1 'https://github.com/junegunn/fzf.git' ${HOME}/.fzf 2>/dev/null || echo $(cd ${HOME}/.fzf && git pull)
       ${HOME}/.fzf/install --xdg --all --no-update-rc --completion
@@ -39,9 +46,11 @@ apps:
       bash /tmp/getnf-install.sh
       getnf -i Meslo
     update_command: "getnf -U || true"
+    description: primarily for Meslo nerdfonts.
   - name: pixi
     bin: pixi
     repo: prefix-dev/pixi
+    description: package management tool.
     install_command: |
       {download(https://pixi.sh/install.sh, /tmp/pixi-install.sh)}
       sh /tmp/pixi-install.sh
@@ -51,9 +60,11 @@ apps:
   - name: ripgrep
     bin: rg
     repo: BurntSushi/ripgrep
+    description: a faster and flexible grep.
   - name: starship
     bin: starship
     repo: starship/starship
+    description: a minimal, blazing-fast, and infinitely customizable prompt for any shell!
     install_command: |
       {download(https://starship.rs/install.sh, /tmp/starship-install.sh)}
       sh /tmp/starship-install.sh --bin-dir {bin_dir} --yes
@@ -63,6 +74,7 @@ apps:
   - name: uv
     bin: uv
     repo: astral-sh/uv # For version checking
+    description: a fast python package manager.
     install_command: |
       {download(https://astral.sh/uv/install.sh, /tmp/uv-install.sh)}
       sh /tmp/uv-install.sh
