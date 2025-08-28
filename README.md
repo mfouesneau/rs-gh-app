@@ -22,6 +22,7 @@ This app aims to provide a robust solution for users who want to keep their tool
 - 📥 **Download Function**: Built-in `{download(url, path)}` template function for custom installers
 - 🔧 **Robust Version Detection**: Tries multiple version flags (`--version`, `-V`, `-v`, `version`) and provides clear feedback
 - ⚡ **GitHub API Integration**: Uses GitHub's API with rate limiting awareness to get the latest release information and possible archives.
+- 🩺 **Debug Mode**: Enables verbose logging and additional checks for troubleshooting
 
 ## Installation
 
@@ -38,18 +39,14 @@ You can download pre-built binaries from the [releases page](https://github.com/
 
 ### Manual Installation
 
-1. Clone this repository:
+1. Clone and build from this repository:
    ```bash
    git clone https://github.com/mfouesneau/rs-gh-app
    cd rs-gh-app
-   ```
-
-2. Build the project:
-   ```bash
    cargo build --release
    ```
 
-3. Copy the binary to your PATH:
+2. Copy the binary to your PATH:
    ```bash
    cp target/release/rs-gh-app ~/.local/bin/
    ```
@@ -77,7 +74,7 @@ apps:
   - name: "uv"
     bin: "uv"
     repo: "astral-sh/uv"  # For version checking
-    install_command: "{download(https://astral.sh/uv/install.sh, /tmp/uv-install.sh)} && sh /tmp/uv-install.sh --bin-dir {bin_dir} --yes"
+    install_command: "{download(https://astral.sh/uv/install.sh, /tmp/uv-install.sh)} && sh /tmp/uv-install.sh"
     update_command: "{bin_path} self update"
 ```
 
@@ -229,11 +226,9 @@ $ rs-gh-app check
 $ rs-gh-app install --dry-run
 ✅ dust is already at the latest version (1.2.3)
 🔍 [DRY RUN] Would install bat v0.25.0
-🏷️  Found release tag: v0.25.0
 📥 Would download: https://github.com/sharkdp/bat/releases/download/v0.25.0/bat-v0.25.0-x86_64-apple-darwin.tar.gz
 📦 Would extract and install binary to: /Users/user/.local/bin
 🔍 [DRY RUN] Would install zoxide v0.9.8
-🏷️  Found release tag: v0.9.8
 📥 Would download: https://github.com/ajeetdsouza/zoxide/releases/download/v0.9.8/zoxide-0.9.8-x86_64-apple-darwin.tar.gz
 📦 Would extract and install binary to: /Users/user/.local/bin
 ℹ️  eza [pixi managed]
@@ -299,7 +294,7 @@ The tool provides user-friendly error messages, including:
 
 ## Version Detection
 
-The tool uses intelligent version detection that:
+The tool uses a version detection that:
 
 - **Tries Multiple Flags**: Tests `--version`, `-V`, `-v`, and `version` in order
 - **Checks Multiple Outputs**: Examines both stdout and stderr for version information
@@ -313,7 +308,13 @@ The tool uses intelligent version detection that:
   - Never suggests downgrading from v1.2.0 to v1.1.0
   - Correctly handles pre-release versions (v1.0.0-beta < v1.0.0)
   - Falls back to string comparison for non-semantic versions
-- **Debug Information**: In dry-run mode, shows which method successfully detected the version
+- **Debug Information**: In dry-run/debug mode, shows which method successfully detected the version
+
+Dealing with multiple matching versions with internal priorities:
+- Prefers archives (`tar.gz`, `tgz`, `zip`, etc.)
+- Prefers `musl` to `glibc`/`gnu` versions for linux platforms (statically linked when possible)
+- Avoids `iOS`, `Android` versions
+- Avoids inconsistent architectures (x86_64, arm64/arm/aarch64)
 
 ## Contributing
 
