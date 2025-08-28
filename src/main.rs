@@ -855,6 +855,7 @@ async fn execute_app_commands(
     version: &str,
     is_update: bool,
     dry_run: bool,
+    debug: bool,
 ) -> Result<()> {
     let (command, log) = if is_update && app.update_command.is_some() {
         (app.update_command.as_ref().unwrap(), "update")
@@ -871,10 +872,12 @@ async fn execute_app_commands(
         );
         return Ok(());
     }
-    println!(
-        "   ⚙️ Executing {} command \n\t {} ",
-        log, processed_command
-    );
+    if debug {
+        println!(
+            "🩺 [DEBUG] Executing {} command for {} \n{}\n🩺 [DEBUG] -- ",
+            log, app.name, processed_command
+        );
+    }
 
     let output = Command::new("sh")
         .arg("-c")
@@ -952,7 +955,7 @@ async fn install_app(app: &App, dry_run: bool, debug: bool) -> Result<()> {
             }
         }
         InstallationMethod::Commands => {
-            execute_app_commands(app, &latest_version, is_update, dry_run).await?;
+            execute_app_commands(app, &latest_version, is_update, dry_run, debug).await?;
         }
     }
 
