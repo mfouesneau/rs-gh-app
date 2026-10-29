@@ -318,6 +318,23 @@ fn extract_tar_gz(bytes: &[u8], dest_path: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
+/// Extract a tar.xz archive to the specified destination path.
+/// compressed using the XZ compression algorithm (uses LZMA2)
+///
+/// # Arguments
+/// * `bytes` - The bytes of the tar.gz archive
+/// * `dest_path` - The destination path to extract the archive to
+///
+/// # Returns
+/// * `Ok(())` - If the extraction was successful
+/// * `Err(Error)` - If the extraction failed
+fn extract_tar_xz(bytes: &[u8], dest_path: &std::path::Path) -> Result<()> {
+    let tar = xz2::read::XzDecoder::new(bytes);
+    let mut archive = tar::Archive::new(tar);
+    archive.unpack(dest_path)?;
+    Ok(())
+}
+
 /// Extract a tar archive to the specified destination path.
 ///
 /// # Arguments
@@ -542,6 +559,8 @@ async fn download_and_extract(url: &str, temp_path: &Path) -> Result<()> {
     println!("ℹ️  Temporary folder {}", temp_path.display());
     if url.ends_with(".tar.gz") || url.ends_with(".tgz") {
         extract_tar_gz(&bytes, temp_path)?;
+    } else if url.ends_with("tar.xz") {
+        extract_tar_xz(&bytes, temp_path)?;
     } else if url.ends_with(".tar") {
         extract_tar(&bytes, temp_path)?;
     } else if url.ends_with(".zip") {
